@@ -1,6 +1,7 @@
 package main
 
 import (
+	"arcanas/embed"
 	"arcanas/internal/routes"
 	"log"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 )
 
 func main() {
-	// Auto-build frontend if needed
+	// Auto-build frontend if needed (only for development)
 	frontendDist := "../frontend/build"
 	isDevMode := os.Getenv("DEV_MODE") == "true"
 
@@ -39,15 +40,10 @@ func main() {
 	// Setup all routes
 	mux := routes.SetupRoutes()
 
-	// Check again after potential build
-	if _, err := os.Stat(frontendDist); err == nil {
-		// Create SPA handler that serves index.html for non-API routes
-		spaHandler := createSPAHandler(frontendDist)
-		mux.Handle("/", spaHandler)
-		log.Println("Serving frontend from filesystem")
-	} else {
-		log.Printf("Frontend directory not found at: %s", frontendDist)
-	}
+	// Create SPA handler from embedded filesystem
+	spaHandler := createEmbeddedSPAHandler()
+	mux.Handle("/", spaHandler)
+	log.Println("Serving frontend from embedded binary")
 
 	// Determine ports
 	apiPort := os.Getenv("API_PORT")
@@ -56,11 +52,7 @@ func main() {
 	}
 
 	log.Printf("Arcanas API running on :%s", apiPort)
-	if _, err := os.Stat(frontendDist); err == nil {
-		log.Printf("Arcanas available at: http://localhost:%s", apiPort)
-	} else {
-		log.Println("Arcanas not available - build failed")
-	}
+	log.Printf("Arcanas available at: http://localhost:%s", apiPort)
 	log.Fatal(http.ListenAndServe(":"+apiPort, mux))
 }
 
@@ -88,6 +80,36 @@ func buildFrontend() error {
 	// Run npm run build
 	log.Println("Running npm run build...")
 	return exec.Command("npm", "run", "build").Run()
+}
+
+// createEmbeddedSPAHandler creates a handler that serves static files with SPA fallback
+func createEmbeddedSPAHandler() http.Handler {
+	// Check if static files exist (copied during build)
+	if embed.FrontendFilesExist() {
+		fileServer := http.FileServer(http.Dir("static"))
+		log.Println("Using bundled frontend files")
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Don't handle API routes
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				http.NotFound(w, r)
+				return
+			}
+
+			// Try to serve the file
+			path := filepath.Join("static", r.URL.Path)
+			if _, err := os.Stat(path); err == nil {
+				// File exists, serve it
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+
+			// File doesn't exist, serve index.html for SPA routing
+			http.ServeFile(w, r, filepath.Join("static", "index.html"))
+		})
+	}
+
+	// Fallback to filesystem (for development)
+	return createSPAHandler("../frontend/build")
 }
 
 // createSPAHandler creates a handler that serves static files with SPA fallback

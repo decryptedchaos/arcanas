@@ -62,13 +62,14 @@ jobs:
     - name: Build backend
       run: |
         cd backend
+        # Copy frontend build to backend/static for embedding
+        cp -r ../frontend/build static
         CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o arcanas cmd/server/main.go
 
     - name: Create release directory
       run: |
-        mkdir -p release/arcanas/backend
-        cp backend/arcanas release/arcanas/backend/
-        cp -r frontend/build release/arcanas/frontend/
+        mkdir -p release/arcanas
+        cp backend/arcanas release/arcanas/
         cp README.md release/arcanas/ 2>/dev/null || echo "README.md not found, skipping"
         
         # Create version info
@@ -147,12 +148,13 @@ jobs:
     - name: Build backend for ${{ matrix.goos }}/${{ matrix.goarch }}
       run: |
         cd backend
+        # Copy frontend build to backend/static for embedding
+        cp -r ../frontend/build static
         CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o arcanas-${{ matrix.goos }}-${{ matrix.goarch }} cmd/server/main.go
         
         # Create architecture-specific release
-        mkdir -p ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/backend
-        cp arcanas-${{ matrix.goos }}-${{ matrix.goarch }} ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/backend/arcanas
-        cp -r ../frontend/build ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/frontend/
+        mkdir -p ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas
+        cp arcanas-${{ matrix.goos }}-${{ matrix.goarch }} ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/arcanas
         
         cd ../release-${{ matrix.goos }}-${{ matrix.goarch }}
         tar -czf arcanas-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz arcanas/
