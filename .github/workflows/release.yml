@@ -112,9 +112,12 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Check if tag already exists
+        # Fetch all remote tags
+        git fetch --tags --force
+        
+        # Check if tag already exists locally or remotely
         TAG="v${{ steps.version.outputs.version }}"
-        if git rev-parse "$TAG" >/dev/null 2>&1; then
+        if git rev-parse "$TAG" >/dev/null 2>&1 || git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
           echo "Tag $TAG already exists, using it"
         else
           echo "Creating new tag $TAG"
