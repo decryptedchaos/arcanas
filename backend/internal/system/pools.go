@@ -71,8 +71,8 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 	// Create mount point
 	mountPoint := "/mnt/" + req.Name
 	cmd := exec.Command("mkdir", "-p", mountPoint)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create mount point: %v", err)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create mount point %s: %v, output: %s", mountPoint, err, string(output))
 	}
 
 	// Build mergerfs command
@@ -84,10 +84,10 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 
 	// Mount with mergerfs
 	cmd = exec.Command("mergerfs", devicesStr, mountPoint, "-o", config)
-	if err := cmd.Run(); err != nil {
+	if output, err := cmd.CombinedOutput(); err != nil {
 		// Cleanup mount point on failure
 		exec.Command("rmdir", mountPoint).Run()
-		return fmt.Errorf("failed to mount mergerfs: %v", err)
+		return fmt.Errorf("failed to mount mergerfs: %v, output: %s", err, string(output))
 	}
 
 	// Add to fstab for persistence
@@ -138,10 +138,7 @@ func createLVMPool(req models.StoragePoolCreateRequest) error {
 
 	// Create volume group
 	vgName := "vg_" + req.Name
-	cmd := exec.Command("vgcreate", vgName)
-	for _, device := range req.Devices {
-		cmd.Args = append(cmd.Args, device)
-	}
+	cmd := exec.Command("vgcreate", append([]string{vgName}, req.Devices...)...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create volume group: %v", err)
 	}
