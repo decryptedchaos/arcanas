@@ -112,15 +112,20 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Create tag
+        # Check if tag already exists
         TAG="v${{ steps.version.outputs.version }}"
-        git tag -a $TAG -m "Release $TAG"
-        git push origin $TAG
-        echo "Created tag: $TAG"
-        
-        # Wait for tag to be available
-        echo "Waiting for tag to be available..."
-        sleep 10
+        if git rev-parse "$TAG" >/dev/null 2>&1; then
+          echo "Tag $TAG already exists, using it"
+        else
+          echo "Creating new tag $TAG"
+          git tag -a $TAG -m "Release $TAG"
+          git push origin $TAG
+          echo "Created tag: $TAG"
+          
+          # Wait for tag to be available
+          echo "Waiting for tag to be available..."
+          sleep 10
+        fi
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
