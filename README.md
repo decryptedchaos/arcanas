@@ -23,16 +23,7 @@
 - **Cross-platform** - Runs on Linux, macOS, Windows
 - **Real-time monitoring** - Live system statistics
 - **Zero configuration** - Works out of the box
-
-## Configuration
-
-Environment variables (optional):
-
-```bash
-export API_PORT=4000    # Server port (default: 4000)
-export WEB_PORT=8080    # Dev mode web port (default: 8080)
-export DEV_MODE=true    # Separate API/UI ports for development
-```
+- **Storage pools** - Created in `/var/lib/arcanas/` automatically
 
 ## Development Mode
 
@@ -85,3 +76,4 @@ cd frontend && npm run dev
 - **Permission denied**: `chmod +x nas-dashboard`
 - **Port in use**: Change `API_PORT` environment variable
 - **Build fails**: Check Node.js and Go versions
+- **Storage pool creation fails**: Ensure `/var/lib/arcanas` is writable or run with proper permissions

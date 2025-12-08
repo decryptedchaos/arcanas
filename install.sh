@@ -19,6 +19,7 @@ SERVICE_NAME="arcanas"
 REPO_OWNER="decryptedchaos"
 REPO_NAME="arcanas"
 VERSION="latest"
+DATA_DIR="/var/lib/arcanas"
 
 print_status() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -248,18 +249,17 @@ create_service_user() {
         print_success "Service user created"
     fi
     
-    # Ensure home directory exists and has proper ownership
-    HOME_DIR="/home/arcanas"
-    if [ ! -d "$HOME_DIR" ]; then
-        print_status "Creating home directory: $HOME_DIR"
-        mkdir -p "$HOME_DIR"
-        chown $SERVICE_USER:$SERVICE_USER "$HOME_DIR"
-        chmod 755 "$HOME_DIR"
-        print_success "Home directory created and configured"
+    # Ensure data directory exists and has proper ownership
+    if [ ! -d "$DATA_DIR" ]; then
+        print_status "Creating data directory: $DATA_DIR"
+        mkdir -p "$DATA_DIR"
+        chown $SERVICE_USER:$SERVICE_USER "$DATA_DIR"
+        chmod 755 "$DATA_DIR"
+        print_success "Data directory created and configured"
     else
         # Ensure correct ownership if directory exists
-        chown $SERVICE_USER:$SERVICE_USER "$HOME_DIR"
-        print_status "Home directory ownership verified"
+        chown $SERVICE_USER:$SERVICE_USER "$DATA_DIR"
+        print_status "Data directory ownership verified"
     fi
 }
 
@@ -355,7 +355,7 @@ Environment=API_PORT=4000
 PrivateTmp=false
 ProtectSystem=false
 ProtectHome=true
-ReadWritePaths=$INSTALL_DIR /home/arcanas /home/arcanas/data /run/sudo /tmp
+ReadWritePaths=$INSTALL_DIR $DATA_DIR /run/sudo /tmp
 
 [Install]
 WantedBy=multi-user.target
@@ -424,7 +424,8 @@ show_info() {
     echo "  http://$(hostname -I | awk '{print $1}'):4000"
     echo ""
     echo "Storage Features:"
-    echo "  - Storage pools created in /data/"
+    echo "  - Data directory: $DATA_DIR"
+    echo "  - Storage pools created in $DATA_DIR/"
     echo "  - Supports MergerFS, LVM, and bind mounts"
     echo "  - RAID array creation and management"
     echo "  - Sudoers configured for storage operations"

@@ -23,7 +23,7 @@ func GetStoragePools() ([]models.StoragePool, error) {
 
 		for _, mount := range mounts {
 			pool := models.StoragePool{
-				Name:       strings.TrimPrefix(mount["target"].(string), "/data/"),
+				Name:       strings.TrimPrefix(mount["target"].(string), "/var/lib/arcanas/"),
 				Type:       "mergerfs",
 				MountPoint: mount["target"].(string),
 				State:      "active",
@@ -68,28 +68,21 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("mergerfs is not installed. Install with:\nUbuntu/Debian: sudo apt install mergerfs\nFedora/CentOS: sudo dnf install mergerfs\nArch: sudo pacman -S mergerfs\nOr download from: https://github.com/trapexit/mergerfs/releases")
 	}
 
-	// Ensure arcanas user home directory exists and has proper permissions
-	homeDir := "/home/arcanas"
-	cmd := exec.Command("sudo", "mkdir", "-p", homeDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create home directory %s: %v, output: %s", homeDir, err, string(output))
-	}
-
-	// Set ownership of home directory
-	cmd = exec.Command("sudo", "chown", "arcanas:arcanas", homeDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to set home directory ownership: %v, output: %s", err, string(output))
-	}
-
 	// Ensure data directory exists and has proper permissions
-	dataDir := "/home/arcanas/data"
-	cmd = exec.Command("mkdir", "-p", dataDir)
+	cmd := exec.Command("sudo", "mkdir", "-p", "/var/lib/arcanas")
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create data directory %s: %v, output: %s", dataDir, err, string(output))
+		return fmt.Errorf("failed to create data directory /var/lib/arcanas: %v, output: %s", err, string(output))
+	}
+
+	// Set ownership of data directory to arcanas user if it exists
+	cmd = exec.Command("sudo", "chown", "-R", "arcanas:arcanas", "/var/lib/arcanas")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Log warning but don't fail if arcanas user doesn't exist
+		fmt.Printf("Warning: failed to set data directory ownership: %v, output: %s\n", err, string(output))
 	}
 
 	// Create mount point using sudo
-	mountPoint := dataDir + "/" + req.Name
+	mountPoint := "/var/lib/arcanas/" + req.Name
 	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create mount point %s: %v, output: %s", mountPoint, err, string(output))
@@ -123,28 +116,21 @@ func createBindMountPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("bind mount pools require exactly one device")
 	}
 
-	// Ensure arcanas user home directory exists and has proper permissions
-	homeDir := "/home/arcanas"
-	cmd := exec.Command("sudo", "mkdir", "-p", homeDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create home directory %s: %v, output: %s", homeDir, err, string(output))
-	}
-
-	// Set ownership of home directory
-	cmd = exec.Command("sudo", "chown", "arcanas:arcanas", homeDir)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to set home directory ownership: %v, output: %s", err, string(output))
-	}
-
 	// Ensure data directory exists and has proper permissions
-	dataDir := "/home/arcanas/data"
-	cmd = exec.Command("mkdir", "-p", dataDir)
+	cmd := exec.Command("sudo", "mkdir", "-p", "/var/lib/arcanas")
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create data directory %s: %v, output: %s", dataDir, err, string(output))
+		return fmt.Errorf("failed to create data directory /var/lib/arcanas: %v, output: %s", err, string(output))
+	}
+
+	// Set ownership of data directory to arcanas user if it exists
+	cmd = exec.Command("sudo", "chown", "-R", "arcanas:arcanas", "/var/lib/arcanas")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Log warning but don't fail if arcanas user doesn't exist
+		fmt.Printf("Warning: failed to set data directory ownership: %v, output: %s\n", err, string(output))
 	}
 
 	// Create mount point using sudo
-	mountPoint := dataDir + "/" + req.Name
+	mountPoint := "/var/lib/arcanas/" + req.Name
 	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create mount point: %v", err)
@@ -176,16 +162,10 @@ func createLVMPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("at least one device is required for LVM")
 	}
 
-	// Ensure /data directory exists and has proper permissions
-	cmd := exec.Command("sudo", "mkdir", "-p", "/data")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create /data directory: %v", err)
-	}
-
-	// Check if arcanas user owns /data, fix if needed
-	cmd = exec.Command("sudo", "chown", "arcanas:arcanas", "/data")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to set /data ownership: %v", err)
+	// Ensure data directory exists and has proper permissions
+	cmd := exec.Command("sudo", "mkdir", "-p", "/var/lib/arcanas")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create data directory /var/lib/arcanas: %v, output: %s", err, string(output))
 	}
 
 	// Create volume group
@@ -215,7 +195,7 @@ func createLVMPool(req models.StoragePoolCreateRequest) error {
 	}
 
 	// Create mount point using sudo
-	mountPoint := "/data/" + req.Name
+	mountPoint := "/var/lib/arcanas/" + req.Name
 	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create mount point: %v", err)
