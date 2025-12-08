@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# NAS Dashboard Production Installer
+# Arcanas Production Installer
 # Downloads prebuilt release and sets up systemd service
 
 set -e
@@ -65,7 +65,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-print_status "Starting NAS Dashboard installation..."
+print_status "Starting Arcanas installation..."
 print_status "Repository: $REPO_OWNER/$REPO_NAME"
 print_status "Version: $VERSION"
 
@@ -112,7 +112,7 @@ install_dependencies() {
 
 # Function to download release
 download_release() {
-    print_status "Downloading NAS Dashboard release..."
+    print_status "Downloading Arcanas release..."
     
     cd /tmp
     
@@ -120,7 +120,7 @@ download_release() {
     if [ "$VERSION" = "latest" ]; then
         DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" | grep "browser_download_url.*linux-amd64.tar.gz" | cut -d '"' -f 4)
     else
-        DOWNLOAD_URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$VERSION/nas-dashboard-${VERSION#v}-linux-amd64.tar.gz"
+        DOWNLOAD_URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$VERSION/arcanas-${VERSION#v}-linux-amd64.tar.gz"
     fi
     
     if [ -z "$DOWNLOAD_URL" ]; then
@@ -130,9 +130,9 @@ download_release() {
     fi
     
     print_status "Downloading from: $DOWNLOAD_URL"
-    wget -q --show-progress "$DOWNLOAD_URL" -O nas-dashboard.tar.gz
+    wget -q --show-progress "$DOWNLOAD_URL" -O arcanas.tar.gz
     
-    if [ ! -f nas-dashboard.tar.gz ]; then
+    if [ ! -f arcanas.tar.gz ]; then
         print_error "Download failed"
         exit 1
     fi
@@ -154,24 +154,24 @@ create_service_user() {
 
 # Function to install files
 install_files() {
-    print_status "Installing NAS Dashboard files..."
+    print_status "Installing Arcanas files..."
     
     # Create installation directory
     mkdir -p $INSTALL_DIR
     
     # Extract archive
     cd /tmp
-    tar -xzf nas-dashboard.tar.gz
+    tar -xzf arcanas.tar.gz
     
     # Copy files to installation directory
-    cp -r nas-dashboard/* $INSTALL_DIR/
+    cp -r arcanas/* $INSTALL_DIR/
     
     # Set ownership and permissions
     chown -R $SERVICE_USER:$SERVICE_USER $INSTALL_DIR
-    chmod +x $INSTALL_DIR/nas-dashboard
+    chmod +x $INSTALL_DIR/arcanas
     
     # Cleanup
-    rm -rf /tmp/nas-dashboard*
+    rm -rf /tmp/arcanas*
     
     print_success "Files installed to $INSTALL_DIR"
 }
@@ -182,7 +182,7 @@ create_systemd_service() {
     
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
-Description=NAS Dashboard
+Description=Arcanas
 After=network.target
 
 [Service]
@@ -190,7 +190,7 @@ Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/nas-dashboard
+ExecStart=$INSTALL_DIR/arcanas
 Restart=always
 RestartSec=5
 Environment=API_PORT=4000
@@ -230,7 +230,7 @@ setup_firewall() {
 
 # Function to enable and start service
 start_service() {
-    print_status "Enabling and starting NAS Dashboard service..."
+    print_status "Enabling and starting Arcanas service..."
     
     systemctl enable $SERVICE_NAME
     systemctl start $SERVICE_NAME
@@ -238,10 +238,10 @@ start_service() {
     # Wait a moment and check status
     sleep 2
     if systemctl is-active --quiet $SERVICE_NAME; then
-        print_success "NAS Dashboard service is running"
+        print_success "Arcanas service is running"
         print_status "Access at: http://$(hostname -I | awk '{print $1}'):4000"
     else
-        print_error "Failed to start NAS Dashboard service"
+        print_error "Failed to start Arcanas service"
         systemctl status $SERVICE_NAME
         exit 1
     fi
@@ -250,7 +250,7 @@ start_service() {
 # Function to show post-install info
 show_info() {
     echo ""
-    print_success "NAS Dashboard installation completed successfully!"
+    print_success "Arcanas installation completed successfully!"
     echo ""
     echo "Service Management:"
     echo "  Start:   sudo systemctl start $SERVICE_NAME"
@@ -259,7 +259,7 @@ show_info() {
     echo "  Status:  sudo systemctl status $SERVICE_NAME"
     echo "  Logs:    sudo journalctl -u $SERVICE_NAME -f"
     echo ""
-    echo "Access NAS Dashboard at:"
+    echo "Access Arcanas at:"
     echo "  http://$(hostname -I | awk '{print $1}'):4000"
     echo ""
     echo "Installation directory: $INSTALL_DIR"
