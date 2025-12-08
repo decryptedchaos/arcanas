@@ -68,9 +68,9 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("mergerfs is not installed. Install with:\nUbuntu/Debian: sudo apt install mergerfs\nFedora/CentOS: sudo dnf install mergerfs\nArch: sudo pacman -S mergerfs\nOr download from: https://github.com/trapexit/mergerfs/releases")
 	}
 
-	// Create mount point
+	// Create mount point using sudo
 	mountPoint := "/data/" + req.Name
-	cmd := exec.Command("mkdir", "-p", mountPoint)
+	cmd := exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create mount point %s: %v, output: %s", mountPoint, err, string(output))
 	}
@@ -82,17 +82,17 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 		config = "defaults" // Default mergerfs options
 	}
 
-	// Mount with mergerfs
-	cmd = exec.Command("mergerfs", devicesStr, mountPoint, "-o", config)
+	// Mount with mergerfs using sudo
+	cmd = exec.Command("sudo", "mergerfs", devicesStr, mountPoint, "-o", config)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// Cleanup mount point on failure
-		exec.Command("rmdir", mountPoint).Run()
+		exec.Command("sudo", "rmdir", mountPoint).Run()
 		return fmt.Errorf("failed to mount mergerfs: %v, output: %s", err, string(output))
 	}
 
-	// Add to fstab for persistence
+	// Add to fstab for persistence using sudo
 	fstabEntry := fmt.Sprintf("%s %s fuse.mergerfs %s 0 0\n", devicesStr, mountPoint, config)
-	cmd = exec.Command("sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
+	cmd = exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
 	cmd.Run()
 
 	return nil

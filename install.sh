@@ -116,20 +116,24 @@ install_dependencies() {
         "Ubuntu"*|"Debian"*)
             apt update
             apt install -y curl wget tar systemd \
-                samba targetcli-fb nfs-kernel-server
+                samba targetcli-fb nfs-kernel-server \
+                mergerfs lvm2
             ;;
         "CentOS"*|"Red Hat"*|"Fedora"*)
             if command -v dnf &> /dev/null; then
                 dnf install -y curl wget tar systemd \
-                    samba targetcli nfs-utils
+                    samba targetcli nfs-utils \
+                    mergerfs lvm2
             else
                 yum install -y curl wget tar systemd \
-                    samba targetcli nfs-utils
+                    samba targetcli nfs-utils \
+                    mergerfs lvm2
             fi
             ;;
         "Arch Linux"*)
             pacman -Sy --noconfirm curl wget tar systemd \
-                samba targetcli-fb nfs-utils
+                samba targetcli-fb nfs-utils \
+                mergerfs lvm2
             ;;
         *)
             print_error "Unsupported OS: $OS"
@@ -138,6 +142,30 @@ install_dependencies() {
     esac
     
     print_success "System dependencies installed"
+}
+
+# Function to setup storage sudoers configuration
+setup_storage_sudoers() {
+    print_status "Setting up storage sudoers configuration..."
+    
+    # Create sudoers file for storage operations
+    cat > /etc/sudoers.d/arcanas-storage << 'EOF'
+# Arcanas storage operations sudoers configuration
+# Allows the arcanas user to run specific storage commands without password
+
+Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /bin/mount, /bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/bin/mergerfs, /bin/sh, /usr/bin/sed, /bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove
+
+arcanas ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
+EOF
+    
+    # Set proper permissions
+    chmod 440 /etc/sudoers.d/arcanas-storage
+    
+    # Create /data directory for storage pools
+    mkdir -p /data
+    chmod 755 /data
+    
+    print_success "Storage sudoers configuration completed"
 }
 
 # Function to download release
@@ -312,7 +340,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=$INSTALL_DIR
+ReadWritePaths=$INSTALL_DIR /data
 
 [Install]
 WantedBy=multi-user.target
@@ -380,6 +408,11 @@ show_info() {
     echo "Access Arcanas at:"
     echo "  http://$(hostname -I | awk '{print $1}'):4000"
     echo ""
+    echo "Storage Features:"
+    echo "  - Storage pools created in /data/"
+    echo "  - Supports MergerFS, LVM, and bind mounts"
+    echo "  - Sudoers configured for storage operations"
+    echo ""
     echo "Installation directory: $INSTALL_DIR"
     echo "Installed version: $ACTUAL_VERSION"
     echo ""
@@ -389,6 +422,7 @@ show_info() {
 main() {
     detect_os
     install_dependencies
+    setup_storage_sudoers
     download_release
     create_service_user
     install_files
