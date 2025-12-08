@@ -68,20 +68,21 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("mergerfs is not installed. Install with:\nUbuntu/Debian: sudo apt install mergerfs\nFedora/CentOS: sudo dnf install mergerfs\nArch: sudo pacman -S mergerfs\nOr download from: https://github.com/trapexit/mergerfs/releases")
 	}
 
-	// Ensure /data directory exists and has proper permissions
-	cmd := exec.Command("sudo", "mkdir", "-p", "/data")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create /data directory: %v", err)
+	// Test sudo access first
+	cmd := exec.Command("sudo", "-n", "true")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("sudo access not configured properly: %v, output: %s. Please run: sudo ./install.sh", err, string(output))
 	}
 
-	// Check if arcanas user owns /data, fix if needed
-	cmd = exec.Command("sudo", "chown", "arcanas:arcanas", "/data")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to set /data ownership: %v", err)
+	// Ensure data directory exists and has proper permissions
+	dataDir := "/home/arcanas/data"
+	cmd = exec.Command("mkdir", "-p", dataDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create data directory %s: %v, output: %s", dataDir, err, string(output))
 	}
 
 	// Create mount point using sudo
-	mountPoint := "/data/" + req.Name
+	mountPoint := dataDir + "/" + req.Name
 	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create mount point %s: %v, output: %s", mountPoint, err, string(output))
@@ -115,20 +116,15 @@ func createBindMountPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("bind mount pools require exactly one device")
 	}
 
-	// Ensure /data directory exists and has proper permissions
-	cmd := exec.Command("sudo", "mkdir", "-p", "/data")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create /data directory: %v", err)
-	}
-
-	// Check if arcanas user owns /data, fix if needed
-	cmd = exec.Command("sudo", "chown", "arcanas:arcanas", "/data")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to set /data ownership: %v", err)
+	// Ensure data directory exists and has proper permissions
+	dataDir := "/home/arcanas/data"
+	cmd := exec.Command("mkdir", "-p", dataDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create data directory %s: %v, output: %s", dataDir, err, string(output))
 	}
 
 	// Create mount point using sudo
-	mountPoint := "/data/" + req.Name
+	mountPoint := dataDir + "/" + req.Name
 	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create mount point: %v", err)
