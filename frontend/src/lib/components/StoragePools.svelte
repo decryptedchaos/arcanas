@@ -55,7 +55,10 @@
         loadStoragePools();
         loadAvailableDisks();
       } else {
-        throw new Error('Failed to create storage pool');
+        return response.text().then(text => {
+          console.error('Server error:', text);
+          throw new Error(`Failed to create storage pool: ${text}`);
+        });
       }
     })
     .catch(error => {
@@ -88,7 +91,9 @@
 
   function getPoolTypeDescription(type) {
     const descriptions = {
-      'mergerfs': 'JBOD pool using MergerFS - combines multiple filesystems',
+      'mergerfs': 'JBOD pool - Disk failure loses ONLY data on that disk, other disks remain safe. 100% space utilization.',
+      'lvm': 'High performance striping - One disk failure loses ALL data. Use only for temporary/cached data.',
+      'bind': 'Simple bind mount - mounts a single device to a directory',
       'jbod': 'Just a Bunch Of Disks - simple disk concatenation'
     };
     return descriptions[type] || type;
@@ -233,8 +238,10 @@
                 id="pool-type"
                 bind:value={createForm.type}
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600">
-                <option value="mergerfs">MergerFS (Recommended)</option>
-                <option value="jbod">JBOD</option>
+                <option value="mergerfs">MergerFS (Recommended - No data loss on disk failure)</option>
+                <option value="lvm">LVM (High Performance - Risk of total data loss)</option>
+                <option value="bind">Bind Mount (Simple)</option>
+                <option value="jbod">JBOD (Just a Bunch Of Disks)</option>
               </select>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{getPoolTypeDescription(createForm.type)}</p>
             </div>

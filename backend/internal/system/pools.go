@@ -53,12 +53,21 @@ func CreateStoragePool(req models.StoragePoolCreateRequest) error {
 	switch req.Type {
 	case "jbod", "mergerfs":
 		return createMergerFSPool(req)
+	case "bind":
+		return createBindMountPool(req)
+	case "lvm":
+		return createLVMPool(req)
 	default:
 		return fmt.Errorf("unsupported pool type: %s", req.Type)
 	}
 }
 
 func createMergerFSPool(req models.StoragePoolCreateRequest) error {
+	// Check if mergerfs is available
+	if _, err := exec.LookPath("mergerfs"); err != nil {
+		return fmt.Errorf("mergerfs is not installed. Install with:\nUbuntu/Debian: sudo apt install mergerfs\nFedora/CentOS: sudo dnf install mergerfs\nArch: sudo pacman -S mergerfs\nOr download from: https://github.com/trapexit/mergerfs/releases")
+	}
+
 	// Create mount point
 	mountPoint := "/mnt/" + req.Name
 	cmd := exec.Command("mkdir", "-p", mountPoint)
@@ -83,6 +92,95 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 
 	// Add to fstab for persistence
 	fstabEntry := fmt.Sprintf("%s %s fuse.mergerfs %s 0 0\n", devicesStr, mountPoint, config)
+	cmd = exec.Command("sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
+	cmd.Run()
+
+	return nil
+}
+
+func createBindMountPool(req models.StoragePoolCreateRequest) error {
+	if len(req.Devices) != 1 {
+		return fmt.Errorf("bind mount pools require exactly one device")
+	}
+
+	// Create mount point
+	mountPoint := "/mnt/" + req.Name
+	cmd := exec.Command("mkdir", "-p", mountPoint)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create mount point: %v", err)
+	}
+
+	// Create bind mount
+	cmd = exec.Command("mount", "--bind", req.Devices[0], mountPoint)
+	if err := cmd.Run(); err != nil {
+		// Cleanup mount point on failure
+		exec.Command("rmdir", mountPoint).Run()
+		return fmt.Errorf("failed to create bind mount: %v", err)
+	}
+
+	// Add to fstab for persistence
+	fstabEntry := fmt.Sprintf("%s %s none bind 0 0\n", req.Devices[0], mountPoint)
+	cmd = exec.Command("sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
+	cmd.Run()
+
+	return nil
+}
+
+func createLVMPool(req models.StoragePoolCreateRequest) error {
+	// Check if LVM tools are available
+	if _, err := exec.LookPath("lvcreate"); err != nil {
+		return fmt.Errorf("LVM tools not installed. Install with: sudo apt install lvm2")
+	}
+
+	if len(req.Devices) == 0 {
+		return fmt.Errorf("at least one device is required for LVM")
+	}
+
+	// Create volume group
+	vgName := "vg_" + req.Name
+	cmd := exec.Command("vgcreate", vgName)
+	for _, device := range req.Devices {
+		cmd.Args = append(cmd.Args, device)
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create volume group: %v", err)
+	}
+
+	// Create logical volume (use 90% of available space)
+	lvName := "lv_" + req.Name
+	cmd = exec.Command("lvcreate", "-l", "90%VG", "-n", lvName, vgName)
+	if err := cmd.Run(); err != nil {
+		// Cleanup volume group on failure
+		exec.Command("vgremove", "-f", vgName).Run()
+		return fmt.Errorf("failed to create logical volume: %v", err)
+	}
+
+	// Create filesystem
+	lvPath := fmt.Sprintf("/dev/%s/%s", vgName, lvName)
+	cmd = exec.Command("mkfs.ext4", lvPath)
+	if err := cmd.Run(); err != nil {
+		// Cleanup on failure
+		exec.Command("lvremove", "-f", lvPath).Run()
+		exec.Command("vgremove", "-f", vgName).Run()
+		return fmt.Errorf("failed to create filesystem: %v", err)
+	}
+
+	// Create mount point
+	mountPoint := "/mnt/" + req.Name
+	cmd = exec.Command("mkdir", "-p", mountPoint)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create mount point: %v", err)
+	}
+
+	// Mount the logical volume
+	cmd = exec.Command("mount", lvPath, mountPoint)
+	if err := cmd.Run(); err != nil {
+		exec.Command("rmdir", mountPoint).Run()
+		return fmt.Errorf("failed to mount logical volume: %v", err)
+	}
+
+	// Add to fstab for persistence
+	fstabEntry := fmt.Sprintf("%s %s ext4 defaults 0 0\n", lvPath, mountPoint)
 	cmd = exec.Command("sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
 	cmd.Run()
 

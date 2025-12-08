@@ -36,6 +36,8 @@ function Storage($$renderer, $$props) {
       "disabled",
       // Show RAID creation modal or redirect to dedicated RAID page
       // Show Pool creation modal or redirect to dedicated Pool page  
+      // TODO: Rename this function - it returns disk info, not stats
+      // TODO: Rename API call - returns disk info, not stats
       // Only update if data actually changed to prevent flashing
       // Trigger reactivity
       // Refresh stats every 10 seconds
