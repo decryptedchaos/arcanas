@@ -13,8 +13,8 @@ import (
 func GetRAIDArrays() ([]models.RAIDArray, error) {
 	var arrays []models.RAIDArray
 
-	// Get RAID arrays from mdadm
-	cmd := exec.Command("mdadm", "--detail", "--scan")
+	// Get RAID arrays from mdadm using sudo
+	cmd := exec.Command("sudo", "mdadm", "--detail", "--scan")
 	output, err := cmd.Output()
 	if err != nil {
 		// No RAID arrays found, return empty slice
@@ -49,8 +49,8 @@ func GetRAIDArrays() ([]models.RAIDArray, error) {
 func getRAIDDetails(device string) (models.RAIDArray, error) {
 	var array models.RAIDArray
 
-	// Get detailed RAID info
-	cmd := exec.Command("mdadm", "--detail", device)
+	// Get detailed RAID info using sudo
+	cmd := exec.Command("sudo", "mdadm", "--detail", device)
 	output, err := cmd.Output()
 	if err != nil {
 		return array, err
@@ -76,8 +76,8 @@ func getRAIDDetails(device string) (models.RAIDArray, error) {
 		}
 	}
 
-	// Get device list
-	cmd = exec.Command("mdadm", "--detail", "--brief", device)
+	// Get device list using sudo
+	cmd = exec.Command("sudo", "mdadm", "--detail", "--brief", device)
 	briefOutput, _ := cmd.Output()
 	array.Devices = parseRAIDDevices(string(briefOutput))
 
@@ -99,19 +99,19 @@ func CreateRAIDArray(req models.RAIDCreateRequest) error {
 		return fmt.Errorf("invalid RAID level: %s", req.Level)
 	}
 
-	// Create mdadm command
+	// Create mdadm command with sudo
 	var cmd *exec.Cmd
 	switch req.Level {
 	case "raid0":
-		cmd = exec.Command("mdadm", "--create", "--verbose", "/dev/md0", "--level=0", "--raid-devices="+strconv.Itoa(len(req.Devices)))
+		cmd = exec.Command("sudo", "mdadm", "--create", "--verbose", "/dev/md0", "--level=0", "--raid-devices="+strconv.Itoa(len(req.Devices)))
 	case "raid1":
-		cmd = exec.Command("mdadm", "--create", "--verbose", "/dev/md0", "--level=1", "--raid-devices="+strconv.Itoa(len(req.Devices)))
+		cmd = exec.Command("sudo", "mdadm", "--create", "--verbose", "/dev/md0", "--level=1", "--raid-devices="+strconv.Itoa(len(req.Devices)))
 	case "raid5":
-		cmd = exec.Command("mdadm", "--create", "--verbose", "/dev/md0", "--level=5", "--raid-devices="+strconv.Itoa(len(req.Devices)))
+		cmd = exec.Command("sudo", "mdadm", "--create", "--verbose", "/dev/md0", "--level=5", "--raid-devices="+strconv.Itoa(len(req.Devices)))
 	case "raid6":
-		cmd = exec.Command("mdadm", "--create", "--verbose", "/dev/md0", "--level=6", "--raid-devices="+strconv.Itoa(len(req.Devices)))
+		cmd = exec.Command("sudo", "mdadm", "--create", "--verbose", "/dev/md0", "--level=6", "--raid-devices="+strconv.Itoa(len(req.Devices)))
 	case "raid10":
-		cmd = exec.Command("mdadm", "--create", "--verbose", "/dev/md0", "--level=10", "--raid-devices="+strconv.Itoa(len(req.Devices)))
+		cmd = exec.Command("sudo", "mdadm", "--create", "--verbose", "/dev/md0", "--level=10", "--raid-devices="+strconv.Itoa(len(req.Devices)))
 	}
 
 	cmd.Args = append(cmd.Args, req.Devices...)
@@ -119,8 +119,8 @@ func CreateRAIDArray(req models.RAIDCreateRequest) error {
 }
 
 func DeleteRAIDArray(name string) error {
-	// Stop the array
-	cmd := exec.Command("mdadm", "--stop", "/dev/md"+name)
+	// Stop the array using sudo
+	cmd := exec.Command("sudo", "mdadm", "--stop", "/dev/md"+name)
 	if err := cmd.Run(); err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func DeleteRAIDArray(name string) error {
 }
 
 func AddDiskToRAID(arrayName, device string) error {
-	cmd := exec.Command("mdadm", "--add", "/dev/"+arrayName, device)
+	cmd := exec.Command("sudo", "mdadm", "--add", "/dev/"+arrayName, device)
 	return cmd.Run()
 }
 

@@ -115,25 +115,25 @@ install_dependencies() {
     case $OS in
         "Ubuntu"*|"Debian"*)
             apt update
-            apt install -y curl wget tar systemd \
+            apt install -y curl wget tar systemd sudo \
                 samba targetcli-fb nfs-kernel-server \
-                mergerfs lvm2
+                mergerfs lvm2 mdadm
             ;;
         "CentOS"*|"Red Hat"*|"Fedora"*)
             if command -v dnf &> /dev/null; then
-                dnf install -y curl wget tar systemd \
+                dnf install -y curl wget tar systemd sudo \
                     samba targetcli nfs-utils \
-                    mergerfs lvm2
+                    mergerfs lvm2 mdadm
             else
-                yum install -y curl wget tar systemd \
+                yum install -y curl wget tar systemd sudo \
                     samba targetcli nfs-utils \
-                    mergerfs lvm2
+                    mergerfs lvm2 mdadm
             fi
             ;;
         "Arch Linux"*)
-            pacman -Sy --noconfirm curl wget tar systemd \
+            pacman -Sy --noconfirm curl wget tar systemd sudo \
                 samba targetcli-fb nfs-utils \
-                mergerfs lvm2
+                mergerfs lvm2 mdadm
             ;;
         *)
             print_error "Unsupported OS: $OS"
@@ -148,22 +148,21 @@ install_dependencies() {
 setup_storage_sudoers() {
     print_status "Setting up storage sudoers configuration..."
     
+    # Ensure sudoers.d directory exists
+    mkdir -p /etc/sudoers.d
+    
     # Create sudoers file for storage operations
-    cat > /etc/sudoers.d/arcanas-storage << 'EOF'
+    cat > /etc/sudoers.d/arcanas-storage << EOF
 # Arcanas storage operations sudoers configuration
 # Allows the arcanas user to run specific storage commands without password
 
-Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /bin/mount, /bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/bin/mergerfs, /bin/sh, /usr/bin/sed, /bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove
+Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /bin/mount, /bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/bin/mergerfs, /bin/sh, /usr/bin/sed, /bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/sbin/mdadm
 
 arcanas ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
 EOF
     
     # Set proper permissions
     chmod 440 /etc/sudoers.d/arcanas-storage
-    
-    # Create /data directory for storage pools
-    mkdir -p /data
-    chmod 755 /data
     
     print_success "Storage sudoers configuration completed"
 }
@@ -411,6 +410,7 @@ show_info() {
     echo "Storage Features:"
     echo "  - Storage pools created in /data/"
     echo "  - Supports MergerFS, LVM, and bind mounts"
+    echo "  - RAID array creation and management"
     echo "  - Sudoers configured for storage operations"
     echo ""
     echo "Installation directory: $INSTALL_DIR"
