@@ -68,15 +68,9 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("mergerfs is not installed. Install with:\nUbuntu/Debian: sudo apt install mergerfs\nFedora/CentOS: sudo dnf install mergerfs\nArch: sudo pacman -S mergerfs\nOr download from: https://github.com/trapexit/mergerfs/releases")
 	}
 
-	// Test sudo access first
-	cmd := exec.Command("sudo", "-n", "true")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("sudo access not configured properly: %v, output: %s. Please run: sudo ./install.sh", err, string(output))
-	}
-
 	// Ensure data directory exists and has proper permissions
 	dataDir := "/home/arcanas/data"
-	cmd = exec.Command("mkdir", "-p", dataDir)
+	cmd := exec.Command("mkdir", "-p", dataDir)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create data directory %s: %v, output: %s", dataDir, err, string(output))
 	}

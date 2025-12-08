@@ -156,7 +156,7 @@ setup_storage_sudoers() {
 # Arcanas storage operations sudoers configuration
 # Allows the arcanas user to run specific storage commands without password
 
-Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /bin/mount, /bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/bin/mergerfs, /bin/sh, /usr/bin/sed, /bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/sbin/mdadm
+Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /bin/mount, /bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/bin/mergerfs, /bin/sh, /usr/bin/sed, /bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/sbin/mdadm, /usr/bin/true
 
 arcanas ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
 EOF
@@ -286,6 +286,10 @@ install_files() {
         chown $SERVICE_USER:$SERVICE_USER "$INSTALL_DIR/arcanas"
         chmod +x "$INSTALL_DIR/arcanas"
         
+        # Always update systemd service to apply any changes
+        print_status "Updating systemd service..."
+        create_systemd_service
+        
         # Cleanup
         rm -rf /tmp/arcanas*
         
@@ -335,11 +339,10 @@ RestartSec=5
 Environment=API_PORT=4000
 
 # Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
+PrivateTmp=false
+ProtectSystem=false
 ProtectHome=true
-ReadWritePaths=$INSTALL_DIR /data
+ReadWritePaths=$INSTALL_DIR /home/arcanas/data /run/sudo /tmp
 
 [Install]
 WantedBy=multi-user.target
