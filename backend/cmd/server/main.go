@@ -1,7 +1,6 @@
 package main
 
 import (
-	"arcanas/embed"
 	"arcanas/internal/routes"
 	"log"
 	"net/http"
@@ -84,32 +83,43 @@ func buildFrontend() error {
 
 // createEmbeddedSPAHandler creates a handler that serves static files with SPA fallback
 func createEmbeddedSPAHandler() http.Handler {
-	// Check if static files exist (copied during build)
-	if embed.FrontendFilesExist() {
-		fileServer := http.FileServer(http.Dir("static"))
-		log.Println("Using bundled frontend files")
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Don't handle API routes
-			if strings.HasPrefix(r.URL.Path, "/api/") {
-				http.NotFound(w, r)
-				return
-			}
+	// Always try embedded files first (production)
+	fileServer := http.FileServer(http.Dir("static"))
+	log.Println("Using bundled frontend files")
 
-			// Try to serve the file
-			path := filepath.Join("static", r.URL.Path)
-			if _, err := os.Stat(path); err == nil {
-				// File exists, serve it
-				fileServer.ServeHTTP(w, r)
-				return
-			}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Don't handle API routes
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
 
-			// File doesn't exist, serve index.html for SPA routing
+		// Try to serve the file from static directory
+		path := filepath.Join("static", r.URL.Path)
+		if _, err := os.Stat(path); err == nil {
+			// File exists, serve it
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// If static files don't exist, fall back to filesystem (development)
+		fallbackPath := filepath.Join("../frontend/build", r.URL.Path)
+		if _, err := os.Stat(fallbackPath); err == nil {
+			log.Println("Falling back to filesystem frontend files")
+			fallbackServer := http.FileServer(http.Dir("../frontend/build"))
+			fallbackServer.ServeHTTP(w, r)
+			return
+		}
+
+		// File doesn't exist anywhere, serve index.html for SPA routing
+		if _, err := os.Stat("static/index.html"); err == nil {
 			http.ServeFile(w, r, filepath.Join("static", "index.html"))
-		})
-	}
-
-	// Fallback to filesystem (for development)
-	return createSPAHandler("../frontend/build")
+		} else if _, err := os.Stat("../frontend/build/index.html"); err == nil {
+			http.ServeFile(w, r, filepath.Join("../frontend/build", "index.html"))
+		} else {
+			http.NotFound(w, r)
+		}
+	})
 }
 
 // createSPAHandler creates a handler that serves static files with SPA fallback

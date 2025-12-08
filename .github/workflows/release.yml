@@ -84,6 +84,7 @@ jobs:
       run: |
         mkdir -p release/arcanas
         cp backend/arcanas release/arcanas/
+        cp -r backend/static release/arcanas/ 2>/dev/null || echo "No static directory found"
         cp README.md release/arcanas/ 2>/dev/null || echo "README.md not found, skipping"
         
         # Create version info
@@ -212,6 +213,7 @@ jobs:
         # Create architecture-specific release
         mkdir -p ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas
         cp arcanas-${{ matrix.goos }}-${{ matrix.goarch }} ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/arcanas
+        cp -r static ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/ 2>/dev/null || echo "No static directory found"
         
         cd ../release-${{ matrix.goos }}-${{ matrix.goarch }}
         tar -czf arcanas-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz arcanas/

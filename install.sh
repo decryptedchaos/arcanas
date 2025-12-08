@@ -43,31 +43,57 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Parse command line arguments
+# Force VERSION to default value first
+VERSION="latest"
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --version)
-            VERSION="$2"
-            shift 2
+            if [[ -n "$2" && "$2" != --* ]]; then
+                VERSION="$2"
+                shift 2
+            else
+                print_error "Missing version number after --version"
+                exit 1
+            fi
             ;;
         --repo)
-            REPO_OWNER="$2"
-            shift 2
+            if [[ -n "$2" && "$2" != --* ]]; then
+                REPO_OWNER="$2"
+                shift 2
+            else
+                print_error "Missing repository after --repo"
+                exit 1
+            fi
             ;;
         --help)
             echo "Usage: $0 [--version VERSION] [--repo OWNER/REPO]"
-            echo "Example: $0 --version v1.0.0 --repo myusername/nas-dashboard"
+            echo "Example: $0 --version v1.0.0 --repo myusername/arcanas"
             exit 0
             ;;
         *)
             print_error "Unknown option: $1"
+            echo "Use --help for usage information"
             exit 1
             ;;
     esac
 done
 
+# Debug output
+echo "DEBUG: VERSION='$VERSION'"
+echo "DEBUG: REPO_OWNER='$REPO_OWNER'"
+echo "DEBUG: REPO_NAME='$REPO_NAME'"
+
 print_status "Starting Arcanas installation..."
 print_status "Repository: $REPO_OWNER/$REPO_NAME"
 print_status "Version: $VERSION"
+
+# Validate version format
+if [[ "$VERSION" != "latest" && ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    print_error "Invalid version format: $VERSION"
+    print_error "Version must be 'latest' or in format v1.0.0"
+    exit 1
+fi
 
 # Function to detect OS
 detect_os() {
@@ -114,13 +140,27 @@ install_dependencies() {
 download_release() {
     print_status "Downloading Arcanas release..."
     
+    # FORCE VERSION TO LATEST TO OVERRIDE ANY WEIRDNESS
+    VERSION="latest"
+    echo "DEBUG: Forced VERSION to '$VERSION'"
+    
     cd /tmp
     
     # Get download URL
     if [ "$VERSION" = "latest" ]; then
-        DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" | grep "browser_download_url.*linux-amd64.tar.gz" | cut -d '"' -f 4)
+        # Get latest release info from GitHub API
+        LATEST_RELEASE_INFO=$(curl -s "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest")
+        DOWNLOAD_URL=$(echo "$LATEST_RELEASE_INFO" | grep "browser_download_url.*linux-amd64.tar.gz" | cut -d '"' -f 4)
+        ACTUAL_VERSION=$(echo "$LATEST_RELEASE_INFO" | grep '"tag_name"' | cut -d '"' -f 4)
+        print_status "Latest version found: $ACTUAL_VERSION"
     else
         DOWNLOAD_URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$VERSION/arcanas-${VERSION#v}-linux-amd64.tar.gz"
+        ACTUAL_VERSION="$VERSION"
+    fi
+    
+    # If we got the actual version from API, use it to construct the correct URL
+    if [ "$VERSION" = "latest" ] && [ -n "$ACTUAL_VERSION" ]; then
+        DOWNLOAD_URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$ACTUAL_VERSION/arcanas-${ACTUAL_VERSION#v}-linux-amd64.tar.gz"
     fi
     
     if [ -z "$DOWNLOAD_URL" ]; then
@@ -130,6 +170,13 @@ download_release() {
     fi
     
     print_status "Downloading from: $DOWNLOAD_URL"
+    
+    # Validate URL format
+    if [[ ! "$DOWNLOAD_URL" =~ ^https://github\.com/.*/releases/download/.*\.tar\.gz$ ]]; then
+        print_error "Invalid download URL format: $DOWNLOAD_URL"
+        exit 1
+    fi
+    
     wget -q --show-progress "$DOWNLOAD_URL" -O arcanas.tar.gz
     
     if [ ! -f arcanas.tar.gz ]; then
@@ -148,7 +195,27 @@ create_service_user() {
     fi
     
     print_status "Creating service user: $SERVICE_USER"
-    useradd -r -s /bin/false -d $INSTALL_DIR $SERVICE_USER
+    
+    # Check which command is available (check full paths for Debian)
+    if command -v /usr/sbin/adduser &> /dev/null || command -v adduser &> /dev/null; then
+        # Debian/Ubuntu style
+        if command -v /usr/sbin/adduser &> /dev/null; then
+            /usr/sbin/adduser --system --no-create-home --shell /bin/false --group $SERVICE_USER
+        else
+            adduser --system --no-create-home --shell /bin/false --group $SERVICE_USER
+        fi
+    elif command -v /usr/sbin/useradd &> /dev/null || command -v useradd &> /dev/null; then
+        # RHEL/CentOS/Fedora style
+        if command -v /usr/sbin/useradd &> /dev/null; then
+            /usr/sbin/useradd -r -s /bin/false $SERVICE_USER
+        else
+            useradd -r -s /bin/false $SERVICE_USER
+        fi
+    else
+        print_error "Neither adduser nor useradd command found"
+        exit 1
+    fi
+    
     print_success "Service user created"
 }
 
@@ -263,7 +330,7 @@ show_info() {
     echo "  http://$(hostname -I | awk '{print $1}'):4000"
     echo ""
     echo "Installation directory: $INSTALL_DIR"
-    echo "Installed version: $VERSION"
+    echo "Installed version: $ACTUAL_VERSION"
     echo ""
 }
 
