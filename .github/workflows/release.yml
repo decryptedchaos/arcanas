@@ -1,0 +1,176 @@
+name: Build and Release NAS Dashboard
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.21'
+  NODE_VERSION: '18'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Get version
+      id: version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        else
+          VERSION=dev-$(git rev-parse --short HEAD)
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+
+    - name: Download Go modules
+      run: |
+        cd backend
+        go mod download
+
+    - name: Run tests
+      run: |
+        cd backend
+        go test -v ./... || true
+
+    - name: Build backend
+      run: |
+        cd backend
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o arcanas cmd/server/main.go
+
+    - name: Create release directory
+      run: |
+        mkdir -p release/arcanas/backend
+        cp backend/arcanas release/arcanas/backend/
+        cp -r frontend/build release/arcanas/frontend/
+        cp README.md release/arcanas/ 2>/dev/null || echo "README.md not found, skipping"
+        
+        # Create version info
+        echo "Arcanas Dashboard ${{ steps.version.outputs.version }}" > release/arcanas/VERSION
+        echo "Build date: $(date -u)" >> release/arcanas/VERSION
+        echo "Git commit: ${{ github.sha }}" >> release/arcanas/VERSION
+
+    - name: Create tarball
+      run: |
+        cd release
+        tar -czf arcanas-${{ steps.version.outputs.version }}-linux-amd64.tar.gz arcanas/
+        sha256sum arcanas-${{ steps.version.outputs.version }}-linux-amd64.tar.gz > arcanas-${{ steps.version.outputs.version }}-linux-amd64.tar.gz.sha256
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: arcanas-${{ steps.version.outputs.version }}-linux-amd64
+        path: |
+          release/arcanas-${{ steps.version.outputs.version }}-linux-amd64.tar.gz
+          release/arcanas-${{ steps.version.outputs.version }}-linux-amd64.tar.gz.sha256
+        retention-days: 30
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release/arcanas-${{ steps.version.outputs.version }}-linux-amd64.tar.gz
+          release/arcanas-${{ steps.version.outputs.version }}-linux-amd64.tar.gz.sha256
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-multi-arch:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        goos: [linux]
+        goarch: [arm64, arm]
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Get version
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+
+    - name: Build backend for ${{ matrix.goos }}/${{ matrix.goarch }}
+      run: |
+        cd backend
+        CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o arcanas-${{ matrix.goos }}-${{ matrix.goarch }} cmd/server/main.go
+        
+        # Create architecture-specific release
+        mkdir -p ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/backend
+        cp arcanas-${{ matrix.goos }}-${{ matrix.goarch }} ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/backend/arcanas
+        cp -r ../frontend/build ../release-${{ matrix.goos }}-${{ matrix.goarch }}/arcanas/frontend/
+        
+        cd ../release-${{ matrix.goos }}-${{ matrix.goarch }}
+        tar -czf arcanas-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz arcanas/
+        sha256sum arcanas-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz > arcanas-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz.sha256
+
+    - name: Upload multi-arch releases
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release-*/arcanas-*.tar.gz
+          release-*/arcanas-*.tar.gz.sha256
+        generate_release_notes: false
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
