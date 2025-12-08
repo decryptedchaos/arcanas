@@ -23,7 +23,7 @@ func GetStoragePools() ([]models.StoragePool, error) {
 
 		for _, mount := range mounts {
 			pool := models.StoragePool{
-				Name:       mount["target"].(string),
+				Name:       strings.TrimPrefix(mount["target"].(string), "/data/"),
 				Type:       "mergerfs",
 				MountPoint: mount["target"].(string),
 				State:      "active",
@@ -69,7 +69,7 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 	}
 
 	// Create mount point
-	mountPoint := "/mnt/" + req.Name
+	mountPoint := "/data/" + req.Name
 	cmd := exec.Command("mkdir", "-p", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create mount point %s: %v, output: %s", mountPoint, err, string(output))
@@ -104,7 +104,7 @@ func createBindMountPool(req models.StoragePoolCreateRequest) error {
 	}
 
 	// Create mount point
-	mountPoint := "/mnt/" + req.Name
+	mountPoint := "/data/" + req.Name
 	cmd := exec.Command("mkdir", "-p", mountPoint)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create mount point: %v", err)
@@ -163,7 +163,7 @@ func createLVMPool(req models.StoragePoolCreateRequest) error {
 	}
 
 	// Create mount point
-	mountPoint := "/mnt/" + req.Name
+	mountPoint := "/data/" + req.Name
 	cmd = exec.Command("mkdir", "-p", mountPoint)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create mount point: %v", err)
