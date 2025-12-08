@@ -68,9 +68,22 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("mergerfs is not installed. Install with:\nUbuntu/Debian: sudo apt install mergerfs\nFedora/CentOS: sudo dnf install mergerfs\nArch: sudo pacman -S mergerfs\nOr download from: https://github.com/trapexit/mergerfs/releases")
 	}
 
+	// Ensure arcanas user home directory exists and has proper permissions
+	homeDir := "/home/arcanas"
+	cmd := exec.Command("sudo", "mkdir", "-p", homeDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create home directory %s: %v, output: %s", homeDir, err, string(output))
+	}
+
+	// Set ownership of home directory
+	cmd = exec.Command("sudo", "chown", "arcanas:arcanas", homeDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to set home directory ownership: %v, output: %s", err, string(output))
+	}
+
 	// Ensure data directory exists and has proper permissions
 	dataDir := "/home/arcanas/data"
-	cmd := exec.Command("mkdir", "-p", dataDir)
+	cmd = exec.Command("mkdir", "-p", dataDir)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create data directory %s: %v, output: %s", dataDir, err, string(output))
 	}
@@ -110,9 +123,22 @@ func createBindMountPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("bind mount pools require exactly one device")
 	}
 
+	// Ensure arcanas user home directory exists and has proper permissions
+	homeDir := "/home/arcanas"
+	cmd := exec.Command("sudo", "mkdir", "-p", homeDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create home directory %s: %v, output: %s", homeDir, err, string(output))
+	}
+
+	// Set ownership of home directory
+	cmd = exec.Command("sudo", "chown", "arcanas:arcanas", homeDir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to set home directory ownership: %v, output: %s", err, string(output))
+	}
+
 	// Ensure data directory exists and has proper permissions
 	dataDir := "/home/arcanas/data"
-	cmd := exec.Command("mkdir", "-p", dataDir)
+	cmd = exec.Command("mkdir", "-p", dataDir)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create data directory %s: %v, output: %s", dataDir, err, string(output))
 	}

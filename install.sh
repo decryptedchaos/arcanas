@@ -222,32 +222,45 @@ download_release() {
 create_service_user() {
     if id "$SERVICE_USER" &>/dev/null; then
         print_status "Service user $SERVICE_USER already exists"
-        return
-    fi
-    
-    print_status "Creating service user: $SERVICE_USER"
-    
-    # Check which command is available (check full paths for Debian)
-    if command -v /usr/sbin/adduser &> /dev/null || command -v adduser &> /dev/null; then
-        # Debian/Ubuntu style
-        if command -v /usr/sbin/adduser &> /dev/null; then
-            /usr/sbin/adduser --system --no-create-home --shell /bin/false --group $SERVICE_USER
-        else
-            adduser --system --no-create-home --shell /bin/false --group $SERVICE_USER
-        fi
-    elif command -v /usr/sbin/useradd &> /dev/null || command -v useradd &> /dev/null; then
-        # RHEL/CentOS/Fedora style
-        if command -v /usr/sbin/useradd &> /dev/null; then
-            /usr/sbin/useradd -r -s /bin/false $SERVICE_USER
-        else
-            useradd -r -s /bin/false $SERVICE_USER
-        fi
     else
-        print_error "Neither adduser nor useradd command found"
-        exit 1
+        print_status "Creating service user: $SERVICE_USER"
+        
+        # Check which command is available (check full paths for Debian)
+        if command -v /usr/sbin/adduser &> /dev/null || command -v adduser &> /dev/null; then
+            # Debian/Ubuntu style
+            if command -v /usr/sbin/adduser &> /dev/null; then
+                /usr/sbin/adduser --system --no-create-home --shell /bin/false --group $SERVICE_USER
+            else
+                adduser --system --no-create-home --shell /bin/false --group $SERVICE_USER
+            fi
+        elif command -v /usr/sbin/useradd &> /dev/null || command -v useradd &> /dev/null; then
+            # RHEL/CentOS/Fedora style
+            if command -v /usr/sbin/useradd &> /dev/null; then
+                /usr/sbin/useradd -r -s /bin/false $SERVICE_USER
+            else
+                useradd -r -s /bin/false $SERVICE_USER
+            fi
+        else
+            print_error "Neither adduser nor useradd command found"
+            exit 1
+        fi
+        
+        print_success "Service user created"
     fi
     
-    print_success "Service user created"
+    # Ensure home directory exists and has proper ownership
+    HOME_DIR="/home/arcanas"
+    if [ ! -d "$HOME_DIR" ]; then
+        print_status "Creating home directory: $HOME_DIR"
+        mkdir -p "$HOME_DIR"
+        chown $SERVICE_USER:$SERVICE_USER "$HOME_DIR"
+        chmod 755 "$HOME_DIR"
+        print_success "Home directory created and configured"
+    else
+        # Ensure correct ownership if directory exists
+        chown $SERVICE_USER:$SERVICE_USER "$HOME_DIR"
+        print_status "Home directory ownership verified"
+    fi
 }
 
 # Function to install files
@@ -342,7 +355,7 @@ Environment=API_PORT=4000
 PrivateTmp=false
 ProtectSystem=false
 ProtectHome=true
-ReadWritePaths=$INSTALL_DIR /home/arcanas/data /run/sudo /tmp
+ReadWritePaths=$INSTALL_DIR /home/arcanas /home/arcanas/data /run/sudo /tmp
 
 [Install]
 WantedBy=multi-user.target
