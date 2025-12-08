@@ -44,6 +44,12 @@
         tx: networkIORates?.tx_rate || 0
       }];
       
+      // Debug logging
+      console.log('Raw disk rates - Read:', diskIORates?.read_rate, 'Write:', diskIORates?.write_rate);
+      console.log('Raw network rates - RX:', networkIORates?.rx_rate, 'TX:', networkIORates?.tx_rate);
+      console.log('Formatted disk - Read:', formatDataRate(diskIORates?.read_rate), 'Write:', formatDataRate(diskIORates?.write_rate));
+      console.log('Formatted network - RX:', formatNetworkRate(networkIORates?.rx_rate), 'TX:', formatNetworkRate(networkIORates?.tx_rate));
+      
       // Keep only recent history
       if (cpuHistory.length > maxHistoryPoints) cpuHistory = cpuHistory.slice(-maxHistoryPoints);
       if (diskIOHistory.length > maxHistoryPoints) diskIOHistory = diskIOHistory.slice(-maxHistoryPoints);
@@ -99,42 +105,42 @@
     if (!rate && rate !== 0) return '0 B/s';
     if (rate === 0 || isNaN(rate)) return '0 B/s';
     
-    // Backend returns MB/s, so convert to B/s first
-    const rateInBs = rate * 1024 * 1024; // MB/s to B/s
-    
+    // Backend returns MB/s, convert to appropriate unit
     const k = 1024;
     const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-    let i = 0;
-    let displayRate = rateInBs;
     
+    // Convert MB/s to B/s first
+    let displayRate = rate * 1024 * 1024;
+    let i = 0;
+    
+    // Scale down to appropriate unit
     while (displayRate >= k && i < sizes.length - 1) {
       displayRate /= k;
       i++;
     }
     
-    const result = parseFloat(displayRate.toFixed(1)) + ' ' + sizes[i];
-    return result;
+    return parseFloat(displayRate.toFixed(1)) + ' ' + sizes[i];
   }
 
   function formatNetworkRate(rate) {
     if (!rate && rate !== 0) return '0 bps';
     if (rate === 0 || isNaN(rate)) return '0 bps';
     
-    // Backend returns Mbps, so convert to bps first
-    const rateInBps = rate * 1000000; // Mbps to bps
-    
+    // Backend returns Mbps, convert to appropriate unit
     const k = 1000; // Use 1000 for network rates (standard)
     const sizes = ['bps', 'Kbps', 'Mbps', 'Gbps'];
-    let i = 0;
-    let displayRate = rateInBps;
     
+    // Convert Mbps to bps first
+    let displayRate = rate * 1000000;
+    let i = 0;
+    
+    // Scale down to appropriate unit
     while (displayRate >= k && i < sizes.length - 1) {
       displayRate /= k;
       i++;
     }
     
-    const result = parseFloat(displayRate.toFixed(1)) + ' ' + sizes[i];
-    return result;
+    return parseFloat(displayRate.toFixed(1)) + ' ' + sizes[i];
   }
   
   function formatLoad(load) {

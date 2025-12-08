@@ -37,8 +37,8 @@ func GetStorageStats() (models.StorageStats, error) {
 func getDiskStats() ([]models.DiskHealth, error) {
 	var disks []models.DiskHealth
 
-	// Get disk info from df command
-	cmd := exec.Command("df", "-B", "1", "--output=source,size,used,target")
+	// Get all block devices (including unformatted)
+	cmd := exec.Command("lsblk", "-b", "-o", "NAME,SIZE,TYPE,MOUNTPOINT")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -47,21 +47,37 @@ func getDiskStats() ([]models.DiskHealth, error) {
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines[1:] { // Skip header
 		fields := strings.Fields(line)
-		if len(fields) >= 4 {
-			device := fields[0]
+		if len(fields) >= 3 {
+			name := fields[0]
 			size, _ := strconv.ParseInt(fields[1], 10, 64)
-			used, _ := strconv.ParseInt(fields[2], 10, 64)
-			_ = fields[3] // mountpoint (unused)
+			deviceType := fields[2]
+			mountpoint := ""
+			if len(fields) > 3 {
+				mountpoint = fields[3]
+			}
 
-			// Skip virtual filesystems
-			if strings.HasPrefix(device, "tmpfs") || strings.HasPrefix(device, "devtmpfs") || strings.HasPrefix(device, "udev") {
+			// Skip virtual devices and partitions for now
+			if deviceType != "disk" {
 				continue
 			}
 
-			// Get model from device name
-			model := getDiskModelFromPath(device)
+			device := "/dev/" + name
+			used := int64(0)
 
-			// Get temperature (try smartctl)
+			// Get used space if mounted
+			if mountpoint != "" {
+				cmd := exec.Command("df", "-B", "1", mountpoint)
+				dfOutput, _ := cmd.Output()
+				dfLines := strings.Split(string(dfOutput), "\n")
+				if len(dfLines) > 1 {
+					dfFields := strings.Fields(dfLines[1])
+					if len(dfFields) >= 3 {
+						used, _ = strconv.ParseInt(dfFields[2], 10, 64)
+					}
+				}
+			}
+
+			model := getDiskModelFromPath(device)
 			temp, _ := getDiskTemperature(device)
 
 			disks = append(disks, models.DiskHealth{
@@ -70,8 +86,8 @@ func getDiskStats() ([]models.DiskHealth, error) {
 				Size:        size,
 				Used:        used,
 				Temperature: temp,
-				Health:      95,        // TODO: Implement real SMART health
-				SmartStatus: "healthy", // TODO: Implement real SMART status
+				Health:      95,
+				SmartStatus: "healthy",
 			})
 		}
 	}

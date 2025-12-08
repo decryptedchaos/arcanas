@@ -46,6 +46,7 @@ func getMountInfo(device string) *MountInfo {
 	return nil
 }
 
+// TODO: Rename this function - it returns disk info, not stats
 func GetDiskStats(w http.ResponseWriter, r *http.Request) {
 	// Get real storage stats
 	storageStats, err := system.GetStorageStats()

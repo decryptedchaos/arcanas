@@ -16,6 +16,51 @@ func SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/disk-stats", handlers.GetDiskStats)
 	mux.HandleFunc("/api/disk/smart", handlers.GetSmartStatus)
 	mux.HandleFunc("/api/disk/partitions", handlers.GetPartitions)
+	mux.HandleFunc("/api/disk/format", handlers.FormatDisk)
+
+	// RAID arrays endpoints
+	mux.HandleFunc("/api/raid-arrays", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetRAIDArrays(w, r)
+		case http.MethodPost:
+			handlers.CreateRAIDArray(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/raid-arrays/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodDelete:
+			handlers.DeleteRAIDArray(w, r)
+		case http.MethodPost:
+			handlers.AddDiskToRAID(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Storage pools endpoints
+	mux.HandleFunc("/api/storage-pools", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetStoragePools(w, r)
+		case http.MethodPost:
+			handlers.CreateStoragePool(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/storage-pools/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			handlers.UpdateStoragePool(w, r)
+		case http.MethodDelete:
+			handlers.DeleteStoragePool(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// SCSI targets endpoints
 	mux.HandleFunc("/api/scsi-targets", func(w http.ResponseWriter, r *http.Request) {

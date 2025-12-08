@@ -28,7 +28,7 @@ async function apiRequest(endpoint, options = {}) {
 
 // Disk Storage API
 export const diskAPI = {
-  // Get all disk statistics
+  // TODO: Rename this function - it returns disk info, not stats
   getDiskStats: () => apiRequest('/disk-stats'),
   
   // Get SMART status for specific disk

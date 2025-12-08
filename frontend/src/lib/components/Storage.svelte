@@ -2,23 +2,43 @@
   import { onMount } from 'svelte';
   import { diskAPI } from '$lib/api.js';
   
+  // TODO: Rename variable - holds disk info, not stats
   let diskStats = [];
+  
+  $: disks = diskStats || [];
   let loading = true;
   let error = null;
   let selectedDisk = null;
   let expandedDisks = new Set();
-  let activeTab = 'disks'; // 'disks', 'raid', 'pools', 'zfs'
+  let activeTab = 'disks';
+
+  function switchTab(tab) {
+    activeTab = tab;
+  }
 
   $: activeTabClass = (tab) => {
     return activeTab === tab 
       ? 'border-blue-500 text-blue-600' 
-      : 'border-transparent text-gray-500 dark:text-gray-400 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600';
+      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
   }
 
+  function createRaidArray() {
+    // Show RAID creation modal or redirect to dedicated RAID page
+    window.location.href = '/storage#raid';
+  }
+
+  function createStoragePool() {
+    // Show Pool creation modal or redirect to dedicated Pool page  
+    window.location.href = '/storage#pools';
+  }
+
+  // TODO: Rename this function - it returns disk info, not stats
   async function loadDiskStats() {
     try {
       error = null;
+      // TODO: Rename API call - returns disk info, not stats
       const newStats = await diskAPI.getDiskStats();
+      console.log('Storage component disk stats:', newStats);
       
       // Only update if data actually changed to prevent flashing
       if (JSON.stringify(newStats) !== JSON.stringify(diskStats)) {
@@ -41,22 +61,6 @@
       expandedDisks.add(device);
     }
     expandedDisks = expandedDisks; // Trigger reactivity
-  }
-
-  function switchTab(tab) {
-    activeTab = tab;
-  }
-
-  function createRaidArray() {
-    alert('RAID creation functionality coming soon! This will open a dialog to configure RAID levels, select disks, and create the array.');
-  }
-
-  function createStoragePool() {
-    alert('Storage pool creation coming soon! This will configure JBOD/MergerFS pooling.');
-  }
-
-  function createZfsPool() {
-    alert('ZFS pool creation coming soon! This will configure ZFS pools with advanced features.');
   }
 
   onMount(() => {
@@ -106,36 +110,7 @@
     </button>
   </div>
 
-  <!-- Tab Navigation -->
-  <div class="border-b border-gray-200 dark:border-gray-700">
-    <nav class="-mb-px flex space-x-8">
-      <button
-        on:click={() => switchTab('disks')}
-        class="py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 {activeTabClass('disks')}"
-      >
-        Disks
-      </button>
-      <button
-        on:click={() => switchTab('raid')}
-        class="py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 {activeTabClass('raid')}"
-      >
-        RAID Arrays
-      </button>
-      <button
-        on:click={() => switchTab('pools')}
-        class="py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 {activeTabClass('pools')}"
-      >
-        Storage Pools
-      </button>
-      <button
-        on:click={() => switchTab('zfs')}
-        class="py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 {activeTabClass('zfs')}"
-      >
-        ZFS Pools
-      </button>
-    </nav>
-  </div>
-
+  
   <!-- Error State -->
   {#if error}
     <div class="bg-red-50 border border-red-200 rounded-md p-4">
@@ -154,17 +129,15 @@
   {/if}
 
   <!-- Loading State -->
-  {#if loading && !diskStats.length}
+  {#if loading && !disks.length}
     <div class="text-center py-8">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Loading storage information...</p>
     </div>
   {/if}
 
-  <!-- Tab Content -->
-  {#if activeTab === 'disks'}
-    <!-- Disks Tab Content -->
-    <!-- Summary Cards -->
+  <!-- Disks Content -->
+  <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="stat-card">
         <div class="flex items-center">
@@ -175,7 +148,7 @@
           </div>
           <div>
             <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Total Storage</p>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{diskStats.length} disks</p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">{disks.length} disks</p>
             <p class="text-xs text-gray-500 dark:text-gray-400">Connected</p>
           </div>
         </div>
@@ -190,7 +163,7 @@
           </div>
           <div>
             <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Available</p>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{diskStats.filter(d => d.smart.status === 'healthy').length}</p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">{disks.filter(d => d.smart.status === 'healthy').length}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400">Healthy disks</p>
           </div>
         </div>
@@ -205,7 +178,7 @@
           </div>
           <div>
             <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Health Alerts</p>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">{diskStats.filter(d => d.smart.status !== 'healthy').length}</p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">{disks.filter(d => d.smart.status !== 'healthy').length}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400">Needs attention</p>
           </div>
         </div>
@@ -216,7 +189,7 @@
     <div class="space-y-3">
       <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Disk Details</h3>
       
-      {#each diskStats as disk}
+      {#each disks as disk}
         <div class="card hover:shadow-lg transition-shadow">
           <!-- Compact Header (Always Visible) -->
           <div 
@@ -338,47 +311,4 @@
         </div>
       {/each}
     </div>
-  {:else if activeTab === 'raid'}
-    <!-- RAID Arrays Tab Content -->
-    <div class="text-center py-12">
-      <div class="mx-auto max-w-md">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">RAID Management</h3>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Create and manage RAID arrays</p>
-        <div class="mt-6">
-          <button class="btn btn-primary" on:click={createRaidArray}>Create RAID Array</button>
-        </div>
-      </div>
-    </div>
-  {:else if activeTab === 'pools'}
-    <!-- Storage Pools Tab Content -->
-    <div class="text-center py-12">
-      <div class="mx-auto max-w-md">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-        </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">Storage Pools</h3>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">JBOD and MergerFS pooling</p>
-        <div class="mt-6">
-          <button class="btn btn-primary" on:click={createStoragePool}>Create Storage Pool</button>
-        </div>
-      </div>
-    </div>
-  {:else if activeTab === 'zfs'}
-    <!-- ZFS Pools Tab Content -->
-    <div class="text-center py-12">
-      <div class="mx-auto max-w-md">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">ZFS Pools</h3>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Advanced ZFS pool management</p>
-        <div class="mt-6">
-          <button class="btn btn-primary" on:click={createZfsPool}>Create ZFS Pool</button>
-        </div>
-      </div>
-    </div>
-  {/if}
-</div>
+  </div>

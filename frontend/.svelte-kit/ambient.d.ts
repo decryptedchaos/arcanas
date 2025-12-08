@@ -46,7 +46,6 @@ declare module '$env/static/private' {
 	export const CSF_LANGUAGE: string;
 	export const DOTNET_ROOT: string;
 	export const CSF_MIGRATION_TYPES: string;
-	export const DEV_MODE: string;
 	export const MEMORY_PRESSURE_WRITE: string;
 	export const COLOR: string;
 	export const npm_config_local_prefix: string;
@@ -198,7 +197,6 @@ declare module '$env/dynamic/private' {
 		CSF_LANGUAGE: string;
 		DOTNET_ROOT: string;
 		CSF_MIGRATION_TYPES: string;
-		DEV_MODE: string;
 		MEMORY_PRESSURE_WRITE: string;
 		COLOR: string;
 		npm_config_local_prefix: string;

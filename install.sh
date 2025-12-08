@@ -115,17 +115,21 @@ install_dependencies() {
     case $OS in
         "Ubuntu"*|"Debian"*)
             apt update
-            apt install -y curl wget tar systemd
+            apt install -y curl wget tar systemd \
+                samba targetcli-fb nfs-kernel-server
             ;;
         "CentOS"*|"Red Hat"*|"Fedora"*)
             if command -v dnf &> /dev/null; then
-                dnf install -y curl wget tar systemd
+                dnf install -y curl wget tar systemd \
+                    samba targetcli nfs-utils
             else
-                yum install -y curl wget tar systemd
+                yum install -y curl wget tar systemd \
+                    samba targetcli nfs-utils
             fi
             ;;
         "Arch Linux"*)
-            pacman -Sy --noconfirm curl wget tar systemd
+            pacman -Sy --noconfirm curl wget tar systemd \
+                samba targetcli-fb nfs-utils
             ;;
         *)
             print_error "Unsupported OS: $OS"
@@ -223,24 +227,65 @@ create_service_user() {
 install_files() {
     print_status "Installing Arcanas files..."
     
-    # Create installation directory
-    mkdir -p $INSTALL_DIR
-    
-    # Extract archive
-    cd /tmp
-    tar -xzf arcanas.tar.gz
-    
-    # Copy files to installation directory
-    cp -r arcanas/* $INSTALL_DIR/
-    
-    # Set ownership and permissions
-    chown -R $SERVICE_USER:$SERVICE_USER $INSTALL_DIR
-    chmod +x $INSTALL_DIR/arcanas
-    
-    # Cleanup
-    rm -rf /tmp/arcanas*
-    
-    print_success "Files installed to $INSTALL_DIR"
+    # Check if this is an update
+    if [ -f "$INSTALL_DIR/arcanas" ]; then
+        print_status "Arcanas already installed, performing update..."
+        
+        # Stop the service
+        if systemctl is-active --quiet $SERVICE_NAME; then
+            print_status "Stopping Arcanas service..."
+            systemctl stop $SERVICE_NAME
+        fi
+        
+        # Backup existing binary
+        cp "$INSTALL_DIR/arcanas" "$INSTALL_DIR/arcanas.backup"
+        print_status "Backed up existing binary"
+        
+        # Extract new archive
+        cd /tmp
+        tar -xzf arcanas.tar.gz
+        
+        # Replace only the binary
+        cp arcanas/arcanas "$INSTALL_DIR/arcanas"
+        
+        # Update static files if they exist
+        if [ -d "arcanas/static" ]; then
+            rm -rf "$INSTALL_DIR/static"
+            cp -r arcanas/static "$INSTALL_DIR/"
+            print_status "Updated frontend files"
+        fi
+        
+        # Set ownership and permissions
+        chown $SERVICE_USER:$SERVICE_USER "$INSTALL_DIR/arcanas"
+        chmod +x "$INSTALL_DIR/arcanas"
+        
+        # Cleanup
+        rm -rf /tmp/arcanas*
+        
+        print_success "Arcanas updated successfully"
+    else
+        # Fresh installation
+        print_status "Performing fresh installation..."
+        
+        # Create installation directory
+        mkdir -p $INSTALL_DIR
+        
+        # Extract archive
+        cd /tmp
+        tar -xzf arcanas.tar.gz
+        
+        # Copy files to installation directory
+        cp -r arcanas/* $INSTALL_DIR/
+        
+        # Set ownership and permissions
+        chown -R $SERVICE_USER:$SERVICE_USER $INSTALL_DIR
+        chmod +x $INSTALL_DIR/arcanas
+        
+        # Cleanup
+        rm -rf /tmp/arcanas*
+        
+        print_success "Files installed to $INSTALL_DIR"
+    fi
 }
 
 # Function to create systemd service
@@ -317,7 +362,13 @@ start_service() {
 # Function to show post-install info
 show_info() {
     echo ""
-    print_success "Arcanas installation completed successfully!"
+    if [ -f "$INSTALL_DIR/arcanas.backup" ]; then
+        print_success "Arcanas update completed successfully!"
+        echo ""
+        echo "Backup created: $INSTALL_DIR/arcanas.backup"
+    else
+        print_success "Arcanas installation completed successfully!"
+    fi
     echo ""
     echo "Service Management:"
     echo "  Start:   sudo systemctl start $SERVICE_NAME"
