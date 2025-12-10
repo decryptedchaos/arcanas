@@ -1,3 +1,9 @@
+<!--
+  This file is part of the Arcanas project.
+  Licensed under the Mozilla Public License, v. 2.0.
+  See the LICENSE file at the project root for details.
+-->
+
 <script>
   import Storage from '$lib/components/Storage.svelte';
   import RAIDManager from '$lib/components/RAIDManager.svelte';
