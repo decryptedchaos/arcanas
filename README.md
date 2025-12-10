@@ -1,171 +1,104 @@
-# Arcanas - NAS Storage Management System
+# 🐉 Arcanas
+> **The Ultimate Self-Hosted NAS Management System** 🚀
 
-A powerful, self-hosted NAS management system with a modern web interface.
+![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)
+![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)
+![SvelteKit](https://img.shields.io/badge/SvelteKit-Latest-FF3E00?logo=svelte&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Development-orange)
 
-## Quick Start
+**Arcanas** is a powerful, modern, and lightning-fast NAS management system designed for the enthusiast. Built with a robust Go backend and a sleek SvelteKit frontend, it delivers a premium experience for managing your storage empire.
 
-### Development Mode
+## ✨ Features
+
+- **🚀 Single Binary Deployment** - Zero external dependencies purely compiled magic.
+- **💎 Embedded Frontend** - A beautiful SvelteKit UI baked right into the binary.
+- **⚡ Real-time Monitoring** - Live system vitals, disk I/O, and detailed metrics.
+- **🛡️ Storage Pools** - Advanced management for MergerFS, LVM, and bind mounts.
+- **📼 RAID Mastery** - Create, manage, and monitor RAID arrays with ease.
+- **📂 File Sharing** - Instant NFS & Samba/SMB configuration.
+- **🎯 iSCSI Targets** - Professional-grade iSCSI target management.
+- **🔄 Hot-Reload Dev** - Blazing fast iteration with Air and Vite.
+
+---
+
+## 🚀 Quick Start
+
+### 🛠️ Development Mode
 
 ```bash
-# First time setup (requires sudo)
+# 1. First time setup (unleash the power)
 sudo ./arcanas setup
 
-# Start development servers
+# 2. Ignite the engines
 ./arcanas start
 
-# Access the application (development mode)
+# 3. Access the dashboard
 # Frontend: http://localhost:4000 
 # API:      http://localhost:4000/api
 ```
 
-### Production Build
+### 📦 Production Build
 
 ```bash
-# Build single binary (frontend embedded)
+# Forge the single binary
 ./arcanas build
 
-# Or use build.sh directly
-./build.sh
-
-# Run the binary
+# Deploy the artifact
 ./arcanas
 
-# Access the application (production mode)
+# Access your NAS
 # Frontend: http://localhost:4000
 # API:      http://localhost:4000/api
 ```
 
-## Features
+---
 
-- **Single binary deployment** - No external dependencies
-- **Embedded frontend** - SvelteKit UI built into the binary
-- **Real-time monitoring** - Live system statistics
-- **Storage pools** - Support for MergerFS, LVM, and bind mounts
-- **RAID management** - Create and manage RAID arrays
-- **File sharing** - NFS, Samba/SMB support
-- **SCSI targets** - iSCSI target management
-- **Hot-reload development** - Fast iteration with Air and Vite
+## 🎮 Management Script
 
-## Management Script
+The `./arcanas` script is your command center using it feels like cheating.
 
-The `./arcanas` script provides a unified interface for all development and build tasks:
+| Command | Action |
+|---------|--------|
+| `./arcanas start` | 🔥 Start backend & frontend dev servers |
+| `./arcanas stop` | 🛑 Stop all running servers |
+| `./arcanas restart` | 🔄 Restart everything |
+| `./arcanas status` | 📊 Check server health |
+| `./arcanas logs` | 📜 View live logs |
+| `./arcanas build` | 🏗️ Compile production binary |
 
-### Development Commands
+---
 
-```bash
-./arcanas start          # Start backend + frontend dev servers
-./arcanas stop           # Stop all dev servers
-./arcanas restart        # Restart dev servers
-./arcanas status         # Show server status
-./arcanas logs           # Show all logs
-./arcanas logs backend   # Show backend logs only
-./arcanas logs frontend  # Show frontend logs only
-```
-
-### Build Commands
-
-```bash
-./arcanas build          # Build production binary (default version)
-./arcanas build 1.2.0    # Build with specific version
-```
-
-### Setup Commands
-
-```bash
-sudo ./arcanas setup     # First-time development environment setup
-```
-
-## Development Details
-
-### Requirements
-
-- **Go 1.21+** - Backend development
-- **Node.js 18+** - Frontend development
-- **Air** - Hot-reload for Go (installed automatically)
-
-### Manual Development (without wrapper script)
-
-If you prefer to run services manually:
-
-```bash
-# Terminal 1: Backend with hot-reload
-cd backend && air
-
-# Terminal 2: Frontend with hot-reload
-cd frontend && npm run dev
-```
-
-### Project Structure
+## 🏗️ Architecture
 
 ```
 arcanas/
-├── backend/           # Go backend
-│   ├── cmd/          # Application entry points
-│   ├── internal/     # Internal packages
-│   │   ├── handlers/ # HTTP handlers
-│   │   ├── models/   # Data models
-│   │   ├── routes/   # Route definitions
-│   │   └── system/   # System operations
-│   └── .air.toml     # Air configuration
-├── frontend/         # SvelteKit frontend
-│   ├── src/
-│   │   ├── lib/      # Components and utilities
-│   │   └── routes/   # SvelteKit routes
-│   └── build/        # Production build output
-├── arcanas           # Management script
-├── build.sh          # Production build script
-└── devSetup.sh       # Development environment setup
+├── 🧠 backend/           # High-performance Go core
+│   ├── cmd/              # Entry points
+│   └── internal/         # Business logic & monitoring
+├── 🎨 frontend/          # Beautiful SvelteKit UI
+│   ├── src/lib/          # Components & stores
+│   └── src/routes/       # Pages & layout
+└── 📜 arcanas            # The God Script (Management CLI)
 ```
 
-## Configuration
+## ⚙️ Configuration
 
-### Environment Variables
+- **`API_PORT`** - Default: `4000`
+- **Storage** - Pools live in `/var/lib/arcanas/`
 
-- `API_PORT` - Backend API port (default: 4000)
+## 🐧 Production Deployment (systemd)
 
-### Storage
+Turn Arcanas into a proper system service:
 
-- Storage pools are created in `/var/lib/arcanas/`
-- Development setup configures necessary sudo permissions
-
-## Production Deployment
-
-### Build
-
-```bash
-# Build for current platform
-./arcanas build 1.0.0
-
-# Or specify target platform
-GOOS=linux GOARCH=amd64 ./build.sh
-```
-
-### Deploy
-
-```bash
-# Copy binary to server
-scp arcanas user@server:/opt/arcanas/
-
-# Make executable
-ssh user@server "chmod +x /opt/arcanas/arcanas"
-
-# Run
-ssh user@server "/opt/arcanas/arcanas"
-```
-
-### Run as Service (systemd)
-
-Create `/etc/systemd/system/arcanas.service`:
-
+1. Create `/etc/systemd/system/arcanas.service`:
 ```ini
 [Unit]
-Description=Arcanas NAS Management System
+Description=Arcanas NAS System 🐉
 After=network.target
 
 [Service]
 Type=simple
 User=arcanas
-WorkingDirectory=/opt/arcanas
 ExecStart=/opt/arcanas/arcanas
 Restart=on-failure
 Environment="API_PORT=4000"
@@ -174,67 +107,25 @@ Environment="API_PORT=4000"
 WantedBy=multi-user.target
 ```
 
-Enable and start:
-
+2. Enable & Start:
 ```bash
-sudo systemctl enable arcanas
-sudo systemctl start arcanas
-sudo systemctl status arcanas
+sudo systemctl enable --now arcanas
 ```
 
-## System Requirements
+## 🧪 Testing
 
-### Development
+We take quality seriously. Check [TESTING.md](TESTING.md) for our comprehensive testing guide.
 
-- Linux (recommended) or macOS
-- Go 1.21+
-- Node.js 18+
-- npm or yarn
+## 🤝 Contributing
 
-### Production
+Join the revolution!
+1. Fork it 🍴
+2. Branch it (`git checkout -b feature/cool-stuff`)
+3. Code it 💻
+4. Push it 🚀
+5. PR it 📥
 
-- Linux (for full functionality)
-- No runtime dependencies (single binary)
+## 📄 License
 
-## Troubleshooting
-
-### Development
-
-- **Port already in use**: Stop existing servers with `./arcanas stop`
-- **Permission denied**: Run `sudo ./arcanas setup` first
-- **Air not found**: Script will auto-install on first run
-- **Frontend build fails**: Run `cd frontend && npm install`
-
-### Production
-
-- **Permission denied**: `chmod +x arcanas`
-- **Port in use**: Change `API_PORT` environment variable
-- **Storage pool creation fails**: Ensure `/var/lib/arcanas` exists and is writable
-
-## Testing
-
-See [TESTING.md](TESTING.md) for comprehensive testing guide.
-
-## API Documentation
-
-The API is available at `http://localhost:4000/api` with the following endpoints:
-
-- `/api/system/*` - System statistics and monitoring
-- `/api/storage-pools` - Storage pool management
-- `/api/raid-arrays` - RAID array management
-- `/api/disk-stats` - Disk information and SMART data
-- `/api/nfs-exports` - NFS export management
-- `/api/samba-shares` - Samba share management
-- `/api/scsi-targets` - iSCSI target management
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests (see TESTING.md)
-5. Submit a pull request
-
-## License
-
-[Your License Here]
+This project is licensed under the **Mozilla Public License 2.0**.
+See [LICENSE](LICENSE) for details.
