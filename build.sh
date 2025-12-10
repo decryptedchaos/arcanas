@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# NAS Dashboard Build Script
+# Arcanas Build Script
 # Creates a single binary with embedded frontend
 
 set -e
 
-echo "🔨 Building NAS Dashboard..."
+echo "🔨 Building Arcanas..."
 
 # Check if we're in the right directory
 if [ ! -f "backend/go.mod" ] || [ ! -f "frontend/package.json" ]; then
-    echo "❌ Error: Run this script from the server-dashboard root directory"
+    echo "❌ Error: Run this script from the arcanas root directory"
     exit 1
 fi
 
@@ -19,8 +19,8 @@ cd frontend
 npm run build
 
 # Check if frontend build succeeded
-if [ ! -d "dist" ]; then
-    echo "❌ Error: Frontend build failed - no dist directory created"
+if [ ! -d "build" ]; then
+    echo "❌ Error: Frontend build failed - no build directory created"
     exit 1
 fi
 
@@ -37,20 +37,19 @@ VERSION=${1:-"1.0.0"}
 
 # Build for current platform
 go build -ldflags "-X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME -X main.GitCommit=$GIT_COMMIT" \
-    -o ../nas-dashboard cmd/server/main.go
+    -o ../arcanas cmd/server/main.go
 
 cd ..
 
 echo "✅ Build complete!"
-echo "📁 Binary: ./nas-dashboard"
+echo "📁 Binary: ./arcanas"
 echo ""
 echo "🚀 To run:"
-echo "  ./nas-dashboard"
+echo "  ./arcanas"
 echo ""
 echo "🌐 Web UI will be available at: http://localhost:4000"
 echo "📡 API will be available at: http://localhost:4000/api"
 echo ""
 echo "🔧 Environment variables:"
 echo "  API_PORT=4000    # API server port (default: 4000)"
-echo "  WEB_PORT=8080    # Web UI port for dev mode (default: 8080)"
-echo "  DEV_MODE=true    # Run API and UI on separate ports (default: false)"
+

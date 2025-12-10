@@ -155,11 +155,12 @@ setup_storage_sudoers() {
     # Create sudoers file for storage operations
     cat > /etc/sudoers.d/arcanas-storage << EOF
 # Arcanas storage operations sudoers configuration
-# Allows the arcanas user to run specific storage commands without password
+# Allows the arcanas user and sudo group to run specific storage commands without password
 
-Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /bin/mount, /bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/bin/mergerfs, /bin/sh, /usr/bin/sed, /bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/sbin/mdadm, /usr/bin/true
+Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /usr/bin/mkdir, /bin/mount, /usr/bin/mount, /bin/umount, /usr/bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/sbin/mkfs*, /usr/bin/mergerfs, /bin/sh, /usr/bin/sh, /usr/bin/sed, /bin/sed, /bin/rmdir, /usr/bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/bin/chown, /bin/chown, /usr/sbin/mdadm, /usr/bin/mdadm, /usr/bin/true
 
 arcanas ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
+%sudo ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
 EOF
     
     # Set proper permissions

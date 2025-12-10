@@ -1,1 +1,14 @@
+# Deployment script
 deploy.sh
+
+# Binary
+arcanas
+nas-dashboard
+
+# Development logs
+.backend.log
+.frontend.log
+.arcanas.pid
+
+# IDE
+.vscode/

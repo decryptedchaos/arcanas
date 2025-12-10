@@ -1,1 +1,10 @@
+# Compiled binary
 arcanas
+nas-dashboard
+
+# Debug binaries
+__debug_bin*
+
+# Air hot-reload
+tmp/
+build-errors.log
