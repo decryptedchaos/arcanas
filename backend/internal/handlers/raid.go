@@ -8,6 +8,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -25,7 +26,10 @@ func GetRAIDArrays(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(arrays)
+	if err := json.NewEncoder(w).Encode(arrays); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func CreateRAIDArray(w http.ResponseWriter, r *http.Request) {
@@ -56,10 +60,13 @@ func CreateRAIDArray(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"message": "RAID array created successfully",
 		"name":    req.Name,
-	})
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func DeleteRAIDArray(w http.ResponseWriter, r *http.Request) {
@@ -78,10 +85,13 @@ func DeleteRAIDArray(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"message": "RAID array deleted successfully",
 		"name":    arrayName,
-	})
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func AddDiskToRAID(w http.ResponseWriter, r *http.Request) {
@@ -108,9 +118,12 @@ func AddDiskToRAID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"message": "Disk added to RAID array successfully",
 		"array":   arrayName,
 		"device":  req.Device,
-	})
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }

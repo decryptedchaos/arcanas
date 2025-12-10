@@ -8,6 +8,7 @@ package routes
 
 import (
 	"net/http"
+	"strings"
 
 	"arcanas/internal/handlers"
 )
@@ -118,6 +119,43 @@ func SetupRoutes() *http.ServeMux {
 	})
 	mux.HandleFunc("/api/samba-shares/connections", handlers.GetSambaConnections)
 	mux.HandleFunc("/api/samba-shares/test", handlers.TestSambaConfig)
+
+	// User management endpoints
+	mux.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetUsers(w, r)
+		case http.MethodPost:
+			handlers.CreateUser(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/users/", func(w http.ResponseWriter, r *http.Request) {
+		// Extract username from URL path
+		path := strings.TrimPrefix(r.URL.Path, "/api/users/")
+		parts := strings.Split(path, "/")
+
+		// Check if this is a services endpoint
+		if len(parts) >= 2 && parts[1] == "services" {
+			if r.Method == http.MethodPut {
+				handlers.UpdateUserServices(w, r)
+				return
+			}
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Regular user operations (PUT/DELETE)
+		switch r.Method {
+		case http.MethodPut:
+			handlers.UpdateUser(w, r)
+		case http.MethodDelete:
+			handlers.DeleteUser(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// NFS exports endpoints
 	mux.HandleFunc("/api/nfs-exports", func(w http.ResponseWriter, r *http.Request) {

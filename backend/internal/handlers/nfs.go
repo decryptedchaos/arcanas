@@ -199,7 +199,10 @@ func CreateNFSExport(w http.ResponseWriter, r *http.Request) {
 
 	// Reload NFS service
 	reloadCmd := exec.Command("systemctl", "reload", "nfs-server")
-	reloadCmd.Run() // Ignore reload errors for now
+	if err := reloadCmd.Run(); err != nil {
+		// Log error but don't fail the request
+		fmt.Printf("Failed to reload NFS service: %v\n", err)
+	}
 
 	// Set response data
 	export.ID = 999 // Would get from actual system
@@ -215,7 +218,10 @@ func CreateNFSExport(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(export)
+	if err := json.NewEncoder(w).Encode(export); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func UpdateNFSExport(w http.ResponseWriter, r *http.Request) {
@@ -235,7 +241,10 @@ func UpdateNFSExport(w http.ResponseWriter, r *http.Request) {
 	// For now, just return success - updating /etc/exports properly would require
 	// more complex parsing and rewriting of the file
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "updated", "path": path})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated", "path": path}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func DeleteNFSExport(w http.ResponseWriter, r *http.Request) {
@@ -256,26 +265,38 @@ func DeleteNFSExport(w http.ResponseWriter, r *http.Request) {
 
 	// Reload NFS service
 	reloadCmd := exec.Command("systemctl", "reload", "nfs-server")
-	reloadCmd.Run() // Ignore reload errors for now
+	if err := reloadCmd.Run(); err != nil {
+		// Log error but don't fail the request
+		fmt.Printf("Failed to reload NFS service: %v\n", err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "deleted", "path": path})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "deleted", "path": path}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func GetNFSExportStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":      "active",
 		"clients":     5,
 		"last_reload": time.Now().Add(-1 * time.Hour),
-	})
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func ReloadNFSConfig(w http.ResponseWriter, r *http.Request) {
 	// In production, actually reload NFS configuration
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":    "reloaded",
 		"timestamp": time.Now().Format(time.RFC3339),
-	})
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }

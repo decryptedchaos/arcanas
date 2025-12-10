@@ -147,26 +147,21 @@ install_dependencies() {
 
 # Function to setup storage sudoers configuration
 setup_storage_sudoers() {
-    print_status "Setting up storage sudoers configuration..."
+    print_status "Setting up sudoers configuration..."
     
     # Ensure sudoers.d directory exists
     mkdir -p /etc/sudoers.d
     
-    # Create sudoers file for storage operations
-    cat > /etc/sudoers.d/arcanas-storage << EOF
-# Arcanas storage operations sudoers configuration
-# Allows the arcanas user and sudo group to run specific storage commands without password
-
-Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /usr/bin/mkdir, /bin/mount, /usr/bin/mount, /bin/umount, /usr/bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/sbin/mkfs*, /usr/bin/mergerfs, /bin/sh, /usr/bin/sh, /usr/bin/sed, /bin/sed, /bin/rmdir, /usr/bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/bin/chown, /bin/chown, /usr/sbin/mdadm, /usr/bin/mdadm, /usr/bin/true
-
-arcanas ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
-%sudo ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
-EOF
+    # Remove old sudoers files to prevent conflicts
+    rm -f /etc/sudoers.d/arcanas-storage /etc/sudoers.d/arcanas-users /etc/sudoers.d/arcanas-samba
+    
+    # Copy shared sudoers configuration
+    cp "$(dirname "$0")/sudoers.conf" /etc/sudoers.d/arcanas
     
     # Set proper permissions
-    chmod 440 /etc/sudoers.d/arcanas-storage
+    chmod 440 /etc/sudoers.d/arcanas
     
-    print_success "Storage sudoers configuration completed"
+    print_success "Sudoers configuration completed"
 }
 
 # Function to download release

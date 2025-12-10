@@ -5,124 +5,183 @@
 -->
 
 <script>
-  import '../app.css';
-  import Sidebar from '$lib/components/Sidebar.svelte';
-  import { page } from '$app/stores';
-  import { onMount } from 'svelte';
-  
+  import Sidebar from "$lib/components/Sidebar.svelte";
+  import { onMount } from "svelte";
+  import "../app.css";
+
   let sidebarOpen = true;
   let darkMode = false;
-  
-  $: darkModeClass = darkMode ? 'dark' : '';
-  
+
+  $: darkModeClass = darkMode ? "dark" : "";
+
   $: if (darkMode) {
-    document.documentElement.classList.add('dark');
+    document.documentElement.classList.add("dark");
   } else {
-    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.remove("dark");
   }
-  
+
+  $: if (sidebarOpen !== undefined) {
+    localStorage.setItem("sidebarOpen", sidebarOpen.toString());
+  }
+
   onMount(() => {
-    // Auto-close sidebar on mobile
-    if (window.innerWidth < 768) {
-      sidebarOpen = false;
-    }
-    
-    // Check for saved dark mode preference or system preference
-    const savedDarkMode = localStorage.getItem('darkMode');
-    if (savedDarkMode !== null) {
-      darkMode = savedDarkMode === 'true';
+    // Check for saved sidebar preference
+    const savedSidebarState = localStorage.getItem("sidebarOpen");
+    if (savedSidebarState !== null) {
+      sidebarOpen = savedSidebarState === "true";
     } else {
-      darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      // Auto-close sidebar on mobile only if no saved preference
+      if (window.innerWidth < 768) {
+        sidebarOpen = false;
+      }
     }
-    
+
+    // Check for saved dark mode preference or system preference
+    const savedDarkMode = localStorage.getItem("darkMode");
+    if (savedDarkMode !== null) {
+      darkMode = savedDarkMode === "true";
+    } else {
+      darkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+
     // Set initial dark mode class
     if (darkMode) {
-      document.documentElement.classList.add('dark');
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove("dark");
     }
   });
 
   function darkModeAction(node, darkMode) {
     const update = (newDarkMode) => {
       if (newDarkMode) {
-        document.documentElement.classList.add('dark');
+        document.documentElement.classList.add("dark");
       } else {
-        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.remove("dark");
       }
     };
-  
+
     update(darkMode);
-  
+
     return {
       update(newDarkMode) {
         update(newDarkMode);
       },
-      destroy() {}
+      destroy() {},
     };
   }
 
   function toggleDarkMode() {
     darkMode = !darkMode;
-    localStorage.setItem('darkMode', darkMode.toString());
+    localStorage.setItem("darkMode", darkMode.toString());
   }
 </script>
 
 <svelte:head>
   <title>Arcanas</title>
-  <meta name="description" content="Arcanas - Modern Storage Management Dashboard" />
+  <meta
+    name="description"
+    content="Arcanas - Modern Storage Management Dashboard"
+  />
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex {darkModeClass}">
   <!-- Sidebar -->
   <Sidebar bind:sidebarOpen />
-  
+
   <!-- Main Content -->
   <div class="flex-1 flex flex-col overflow-hidden">
     <!-- Top Navigation -->
-    <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 z-10">
+    <header
+      class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 z-10"
+    >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
           <div class="flex items-center">
             <button
-              on:click={() => sidebarOpen = !sidebarOpen}
+              on:click={() => (sidebarOpen = !sidebarOpen)}
               class="md:hidden p-2 rounded-md text-gray-400 dark:text-gray-300 hover:text-gray-500 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Toggle sidebar"
             >
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              <svg
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
               </svg>
             </button>
-            <h1 class="ml-4 text-2xl font-bold text-gray-900 dark:text-white tracking-wider font-mono">ARCANAS</h1>
+            <h1
+              class="ml-4 text-2xl font-bold text-gray-900 dark:text-white tracking-wider font-mono"
+            >
+              ARCANAS
+            </h1>
           </div>
-          
+
           <div class="flex items-center space-x-4">
             <!-- Dark Mode Toggle -->
-            <button 
+            <button
               on:click={toggleDarkMode}
               class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               title="Toggle dark mode"
             >
               {#if darkMode}
-                <svg class="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/>
+                <svg
+                  class="w-5 h-5 text-yellow-500"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
               {:else}
-                <svg class="w-5 h-5 text-gray-700 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                <svg
+                  class="w-5 h-5 text-gray-700 dark:text-gray-300"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"
+                  />
                 </svg>
               {/if}
             </button>
-            
-            <div class="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300">
-              <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+
+            <div
+              class="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300"
+            >
+              <div
+                class="w-2 h-2 bg-green-500 rounded-full animate-pulse"
+              ></div>
               <span>System Online</span>
             </div>
-            
+
             <div class="relative">
-              <button class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Notifications">
-                <svg class="h-5 w-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              <button
+                class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Notifications"
+              >
+                <svg
+                  class="h-5 w-5 text-gray-600 dark:text-gray-300"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                  />
                 </svg>
               </button>
             </div>
@@ -130,7 +189,7 @@
         </div>
       </div>
     </header>
-    
+
     <!-- Page Content -->
     <main class="flex-1 overflow-auto">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -143,8 +202,8 @@
 <style>
   :global(body) {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+      "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
+      "Helvetica Neue", sans-serif;
   }
 </style>

@@ -254,14 +254,14 @@ func GetNetworkIORates() (map[string]interface{}, error) {
 		}, nil
 	}
 
-	// If rates are very low, show some mock activity for demonstration
+	// If rates are very low, show realistic idle values
 	if rxMbps < 0.1 && txMbps < 0.1 {
 		now := time.Now()
 		return map[string]interface{}{
-			"rx_rate":   2.5 + (float64(now.Unix()%7) * 0.8), // Add variation
-			"tx_rate":   1.2 + (float64(now.Unix()%5) * 0.4),
-			"rx_pps":    25 + int(now.Unix()%20),
-			"tx_pps":    15 + int(now.Unix()%15),
+			"rx_rate":   0.0, // System is idle
+			"tx_rate":   0.0, // System is idle
+			"rx_pps":    0,
+			"tx_pps":    0,
 			"timestamp": now,
 		}, nil
 	}

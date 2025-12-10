@@ -8,9 +8,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,7 +105,10 @@ func GetDiskStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(disks)
+	if err := json.NewEncoder(w).Encode(disks); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func GetSmartStatus(w http.ResponseWriter, r *http.Request) {
@@ -123,36 +128,127 @@ func GetSmartStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(smart)
+	if err := json.NewEncoder(w).Encode(smart); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func GetPartitions(w http.ResponseWriter, r *http.Request) {
 	disk := r.URL.Query().Get("disk")
+	if disk == "" {
+		// If no disk specified, return all partitions
+		log.Printf("No disk specified, returning all partitions")
+	}
 
-	// TODO: Implement actual partition reading using /proc/partitions or df
-	log.Printf("Partitions requested for disk: %s", disk)
+	// 1. Run lsblk JSON output
+	// lsblk -J -b -o NAME,MOUNTPOINT,SIZE,FSTYPE,UUID,PATH <disk>
+	args := []string{"-J", "-b", "-o", "NAME,MOUNTPOINT,SIZE,FSTYPE,UUID,PATH"}
+	if disk != "" {
+		args = append(args, disk)
+	}
 
-	partitions := []models.Partition{
-		{
-			Device:     "/dev/sda1",
-			Mountpoint: "/boot",
-			Size:       1000000000,
-			Used:       500000000,
-			Available:  500000000,
-			Usage:      50.0,
-			Filesystem: "ext4",
-		},
-		{
-			Device:     "/dev/sda2",
-			Mountpoint: "/",
-			Size:       1999000000000,
-			Used:       1199500000000,
-			Available:  799500000000,
-			Usage:      60.0,
-			Filesystem: "ext4",
-		},
+	cmd := exec.Command("lsblk", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("Error running lsblk: %v", err)
+		http.Error(w, "Failed to list partitions", http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Parse lsblk JSON
+	type LsblkDevice struct {
+		Name       string        `json:"name"`
+		Path       string        `json:"path"`
+		Size       interface{}   `json:"size"` // can be string or number? usually number with -b
+		Mountpoint *string       `json:"mountpoint"`
+		Fstype     *string       `json:"fstype"`
+		Children   []LsblkDevice `json:"children"`
+	}
+	type LsblkOutput struct {
+		Blockdevices []LsblkDevice `json:"blockdevices"`
+	}
+
+	var result LsblkOutput
+	if err := json.Unmarshal(output, &result); err != nil {
+		log.Printf("Error parsing lsblk json: %v", err)
+		http.Error(w, "Failed to parse partitions", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Flatten and Convert to API Model
+	var partitions []models.Partition
+
+	var processDevice func(d LsblkDevice)
+	processDevice = func(d LsblkDevice) {
+		// Check if it's a partition (children usually, or leaf node)
+		// Or just return everything that has a path
+		if d.Path != "" {
+			part := models.Partition{
+				Device:     d.Path,
+				Filesystem: "",
+			}
+
+			if d.Fstype != nil {
+				part.Filesystem = *d.Fstype
+			}
+			if d.Mountpoint != nil {
+				part.Mountpoint = *d.Mountpoint
+
+				// Get usage if mounted
+				if size, usedResult := system.GetPathUsage(part.Mountpoint); size > 0 {
+					part.Size = size
+					part.Used = usedResult
+					part.Available = size - usedResult
+					if size > 0 {
+						part.Usage = float64(usedResult) / float64(size) * 100.0
+					}
+				}
+			} else {
+				// Parse size from lsblk (bytes)
+				// lsblk JSON size is number if -b used, or is it?
+				// json decoder will handle float64 for numbers
+				// Let's handle it safely
+				switch v := d.Size.(type) {
+				case float64:
+					part.Size = int64(v)
+				case string:
+					// try parsing
+					if s, err := strconv.ParseInt(v, 10, 64); err == nil {
+						part.Size = s
+					}
+				}
+			}
+
+			// Only add if it looks like a partition or logical volume (not the disk itself if it has children)
+			// But user might want to format the whole disk?
+			// GetPartitions implies "parts".
+			// Let's include it.
+			partitions = append(partitions, part)
+		}
+
+		for _, child := range d.Children {
+			processDevice(child)
+		}
+	}
+
+	for _, d := range result.Blockdevices {
+		// If disk was specified, lsblk returns just that disk object
+		// If we are looking at the ROOT device, we might skip adding it to partitions list unless it IS a partition?
+		// For now, process children. If no children, process self.
+		if len(d.Children) > 0 {
+			for _, child := range d.Children {
+				processDevice(child)
+			}
+		} else {
+			// Single device (e.g. partition passed directly or disk with no parts)
+			processDevice(d)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(partitions)
+	if err := json.NewEncoder(w).Encode(partitions); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }

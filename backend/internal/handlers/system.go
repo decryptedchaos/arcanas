@@ -7,7 +7,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -19,35 +18,35 @@ func GetSystemStats(w http.ResponseWriter, r *http.Request) {
 	// Get real CPU stats
 	cpuStats, err := system.GetCPUStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get CPU stats", http.StatusInternalServerError)
 		return
 	}
 
 	// Get real memory stats
 	memoryStats, err := system.GetMemoryStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get memory stats", http.StatusInternalServerError)
 		return
 	}
 
 	// Get real network stats
 	networkStats, err := system.GetNetworkStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get network stats", http.StatusInternalServerError)
 		return
 	}
 
 	// Get real storage stats
 	storageStats, err := system.GetStorageStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get storage stats", http.StatusInternalServerError)
 		return
 	}
 
 	// Get real system info
 	systemInfo, err := system.GetSystemInfo()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get system info", http.StatusInternalServerError)
 		return
 	}
 
@@ -59,65 +58,59 @@ func GetSystemStats(w http.ResponseWriter, r *http.Request) {
 		"system":  systemInfo,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	writeJSONResponse(w, stats)
 }
 
 func GetDiskIORates(w http.ResponseWriter, r *http.Request) {
 	// Get real disk I/O rates from system
 	ioRates, err := system.GetDiskIORates()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get disk I/O rates", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ioRates)
+	writeJSONResponse(w, ioRates)
 }
 
 func GetNetworkIORates(w http.ResponseWriter, r *http.Request) {
 	// Get real network I/O rates from system
 	ioRates, err := system.GetNetworkIORates()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get network I/O rates", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ioRates)
+	writeJSONResponse(w, ioRates)
 }
 
 func GetCPUStats(w http.ResponseWriter, r *http.Request) {
 	cpu, err := system.GetCPUStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get CPU stats", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cpu)
+	writeJSONResponse(w, cpu)
 }
 
 func GetMemoryStats(w http.ResponseWriter, r *http.Request) {
 	memory, err := system.GetMemoryStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get memory stats", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(memory)
+	writeJSONResponse(w, memory)
 }
 
 func GetNetworkStats(w http.ResponseWriter, r *http.Request) {
 	network, err := system.GetNetworkStats()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get network stats", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(network)
+	writeJSONResponse(w, network)
 }
 
 func GetStorageHealth(w http.ResponseWriter, r *http.Request) {
@@ -144,8 +137,7 @@ func GetStorageHealth(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(storage)
+	writeJSONResponse(w, storage)
 }
 
 func GetSystemProcesses(w http.ResponseWriter, r *http.Request) {
@@ -155,8 +147,7 @@ func GetSystemProcesses(w http.ResponseWriter, r *http.Request) {
 		Sleeping: 242,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(processes)
+	writeJSONResponse(w, processes)
 }
 
 func GetSystemLogs(w http.ResponseWriter, r *http.Request) {
@@ -182,14 +173,13 @@ func GetSystemLogs(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(logs)
+	writeJSONResponse(w, logs)
 }
 
 func RebootSystem(w http.ResponseWriter, r *http.Request) {
 	// In production, actually reboot the system
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSONResponse(w, map[string]string{
 		"status":  "rebooting",
 		"message": "System reboot initiated",
 	})
@@ -198,7 +188,7 @@ func RebootSystem(w http.ResponseWriter, r *http.Request) {
 func ShutdownSystem(w http.ResponseWriter, r *http.Request) {
 	// In production, actually shutdown the system
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSONResponse(w, map[string]string{
 		"status":  "shutting_down",
 		"message": "System shutdown initiated",
 	})

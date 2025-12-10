@@ -26,7 +26,10 @@ func GetSCSITargets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(targets)
+	if err := json.NewEncoder(w).Encode(targets); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func getLIOTargets() ([]models.SCSITarget, error) {
@@ -210,7 +213,10 @@ func CreateSCSITarget(w http.ResponseWriter, r *http.Request) {
 	target.Status = "active"
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(target)
+	if err := json.NewEncoder(w).Encode(target); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func createLIOTarget(target models.SCSITarget) error {
@@ -244,7 +250,10 @@ func UpdateSCSITarget(w http.ResponseWriter, r *http.Request) {
 
 	target.LastAccess = time.Now()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(target)
+	if err := json.NewEncoder(w).Encode(target); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func updateLIOTarget(target models.SCSITarget) error {
@@ -284,7 +293,10 @@ func DeleteSCSITarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "deleted", "target": targetName})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "deleted", "target": targetName}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func deleteLIOTarget(targetName string) error {
@@ -324,7 +336,10 @@ func ToggleSCSITarget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "toggled", "target": targetName})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "toggled", "target": targetName}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func toggleLIOTarget(targetName string) error {
@@ -363,7 +378,10 @@ func GetSCSISessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sessions)
+	if err := json.NewEncoder(w).Encode(sessions); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func getLIOSessions() ([]models.Session, error) {

@@ -18,17 +18,17 @@ import (
 	"time"
 
 	"arcanas/internal/models"
+	"arcanas/internal/utils"
 )
 
 func GetSambaShares(w http.ResponseWriter, r *http.Request) {
 	shares, err := getSambaSharesFromSystem()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get Samba shares: %v", err), http.StatusInternalServerError)
+		handleError(w, err, "Failed to get Samba shares", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(shares)
+	writeJSONResponse(w, shares)
 }
 
 func getSambaSharesFromSystem() ([]models.SambaShare, error) {
@@ -225,7 +225,7 @@ func CreateSambaShare(w http.ResponseWriter, r *http.Request) {
 
 	// Reload Samba configuration
 	if err := reloadSamba(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to reload Samba: %v", err), http.StatusInternalServerError)
+		handleError(w, err, "Failed to reload Samba", http.StatusInternalServerError)
 		return
 	}
 
@@ -234,18 +234,10 @@ func CreateSambaShare(w http.ResponseWriter, r *http.Request) {
 	share.LastModified = time.Now()
 	share.Available = true
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(share)
+	writeJSONResponse(w, share)
 }
 
 func addShareToSmbConf(share models.SambaShare) error {
-	smbConfPath := "/etc/samba/smb.conf"
-	file, err := os.OpenFile(smbConfPath, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
 	// Build share configuration
 	var config strings.Builder
 	config.WriteString(fmt.Sprintf("\n[%s]\n", share.Name))
@@ -264,8 +256,8 @@ func addShareToSmbConf(share models.SambaShare) error {
 	config.WriteString(fmt.Sprintf("\tbrowseable = %s\n", boolToYesNo(share.Browseable)))
 	config.WriteString(fmt.Sprintf("\tavailable = %s\n", boolToYesNo(share.Available)))
 
-	_, err = file.WriteString(config.String())
-	return err
+	// Use wrapper to append to smb.conf
+	return utils.SudoAppendFile("/etc/samba/smb.conf", config.String())
 }
 
 func boolToYesNo(b bool) string {
@@ -276,39 +268,41 @@ func boolToYesNo(b bool) string {
 }
 
 func UpdateSambaShare(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("UpdateSambaShare called\n")
 	var share models.SambaShare
 	if err := json.NewDecoder(r.Body).Decode(&share); err != nil {
+		fmt.Printf("Failed to decode share: %v\n", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	fmt.Printf("Updating share: %+v\n", share)
 	// Update share in smb.conf
 	if err := updateShareInSmbConf(share); err != nil {
+		fmt.Printf("Failed to update share in smb.conf: %v\n", err)
 		http.Error(w, fmt.Sprintf("Failed to update share: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Reload Samba configuration
 	if err := reloadSamba(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to reload Samba: %v", err), http.StatusInternalServerError)
+		fmt.Printf("Failed to reload Samba: %v\n", err)
+		handleError(w, err, "Failed to reload Samba", http.StatusInternalServerError)
 		return
 	}
 
 	share.LastModified = time.Now()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(share)
+	writeJSONResponse(w, share)
 }
 
 func updateShareInSmbConf(share models.SambaShare) error {
-	smbConfPath := "/etc/samba/smb.conf"
-
-	// Read entire file
-	content, err := os.ReadFile(smbConfPath)
+	// Read entire file using wrapper
+	output, err := utils.SudoReadFile("/etc/samba/smb.conf")
 	if err != nil {
 		return err
 	}
 
-	lines := strings.Split(string(content), "\n")
+	lines := strings.Split(string(output), "\n")
 	var newLines []string
 	inTargetShare := false
 	shareFound := false
@@ -360,15 +354,23 @@ func updateShareInSmbConf(share models.SambaShare) error {
 
 	// Insert the new share config
 	var finalLines []string
+	shareAdded := false
 	for _, line := range newLines {
 		finalLines = append(finalLines, line)
-		if strings.HasPrefix(strings.TrimSpace(line), fmt.Sprintf("[%s]", share.Name)) {
+		if strings.HasPrefix(strings.TrimSpace(line), fmt.Sprintf("[%s]", share.Name)) && !shareAdded {
 			finalLines = append(finalLines, shareConfig.String())
+			shareAdded = true
 		}
 	}
 
-	// Write back to file
-	return os.WriteFile(smbConfPath, []byte(strings.Join(finalLines, "\n")), 0644)
+	// Write back to file using wrapper
+	err = utils.SudoWriteFile("/etc/samba/smb.conf", strings.Join(finalLines, "\n"))
+	if err != nil {
+		fmt.Printf("ERROR writing smb.conf: %v\n", err)
+		return fmt.Errorf("failed to write file: %v", err)
+	}
+	fmt.Printf("Successfully wrote smb.conf\n")
+	return nil
 }
 
 func DeleteSambaShare(w http.ResponseWriter, r *http.Request) {
@@ -395,12 +397,11 @@ func DeleteSambaShare(w http.ResponseWriter, r *http.Request) {
 
 	// Reload Samba configuration
 	if err := reloadSamba(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to reload Samba: %v", err), http.StatusInternalServerError)
+		handleError(w, err, "Failed to reload Samba", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "deleted", "share": shareName})
+	writeJSONStatusResponse(w, "deleted", "Share deleted successfully")
 }
 
 func deleteShareFromSmbConf(shareName string) error {
@@ -471,12 +472,11 @@ func ToggleSambaShare(w http.ResponseWriter, r *http.Request) {
 
 	// Reload Samba configuration
 	if err := reloadSamba(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to reload Samba: %v", err), http.StatusInternalServerError)
+		handleError(w, err, "Failed to reload Samba", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "toggled", "share": shareName})
+	writeJSONStatusResponse(w, "toggled", "Share availability toggled successfully")
 }
 
 func toggleShareInSmbConf(shareName string) error {
@@ -539,19 +539,18 @@ func toggleShareInSmbConf(shareName string) error {
 }
 
 func reloadSamba() error {
-	// Try different commands to reload Samba
-	commands := [][]string{
-		{"systemctl", "reload", "smb"},
-		{"systemctl", "reload", "samba"},
-		{"service", "smb", "reload"},
-		{"service", "samba", "reload"},
+	// Try different commands to reload Samba using wrappers
+	if err := utils.SudoSystemctlReload("smb"); err == nil {
+		return nil
 	}
-
-	for _, cmdArgs := range commands {
-		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-		if err := cmd.Run(); err == nil {
-			return nil
-		}
+	if err := utils.SudoSystemctlReload("samba"); err == nil {
+		return nil
+	}
+	if err := utils.SudoServiceReload("smb"); err == nil {
+		return nil
+	}
+	if err := utils.SudoServiceReload("samba"); err == nil {
+		return nil
 	}
 
 	return fmt.Errorf("failed to reload Samba service")
@@ -565,7 +564,10 @@ func GetSambaConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(connections)
+	if err := json.NewEncoder(w).Encode(connections); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func getSambaConnectionsFromSystem() ([]models.SambaConnection, error) {

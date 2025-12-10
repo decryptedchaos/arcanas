@@ -236,13 +236,13 @@ func GetDiskIORates() (map[string]interface{}, error) {
 	readOpsRate := float64(readOpsDiff) / timeDiff
 	writeOpsRate := float64(writeOpsDiff) / timeDiff
 
-	// If rates are very small, return mock data to show some activity
+	// If rates are very small, show realistic idle values
 	if readMBRate < 0.1 && writeMBRate < 0.1 {
 		return map[string]interface{}{
-			"read_rate":  3.2 + (float64(now.Unix()%10) * 0.5), // Add some variation
-			"write_rate": 6.8 + (float64(now.Unix()%8) * 0.3),
-			"read_iops":  15 + (float64(now.Unix()%5) * 2),
-			"write_iops": 28 + (float64(now.Unix()%7) * 3),
+			"read_rate":  0.0, // System is idle
+			"write_rate": 0.0, // System is idle
+			"read_iops":  0,
+			"write_iops": 0,
 			"timestamp":  now,
 		}, nil
 	}
