@@ -8,6 +8,8 @@
 
 **Arcanas** is a powerful, modern, and lightning-fast NAS management system designed for the enthusiast. Built with a robust Go backend and a sleek SvelteKit frontend, it delivers a premium experience for managing your storage empire.
 
+#### BE ADVISED, THIS IS UNDER HEAVY DEVELOPMENT, WE WOULD WELCOME ANY FIXES YOU WANT TO CONTRIBUTE 
+
 <img width="1920" height="904" alt="Image" src="https://github.com/user-attachments/assets/45520c7e-b3c3-4563-913a-d606729c6057" />
 
 ## ✨ Features
