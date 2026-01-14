@@ -482,7 +482,7 @@
                     stroke="#10B981"
                     stroke-width="8"
                     fill="none"
-                    stroke-dasharray={`${((diskIOHistory[diskIOHistory.length - 1]?.read || 0) / calculateScale(diskIOHistory, "read").max) * 351.86} 351.86`}
+                    stroke-dasharray={`${((diskIOHistory[diskIOHistory.length - 1]?.read || 0) / calculateScale(diskIOHistory, "all").max) * 351.86} 351.86`}
                     stroke-linecap="round"
                   />
                 </svg>
@@ -522,7 +522,7 @@
                     stroke="#F59E0B"
                     stroke-width="8"
                     fill="none"
-                    stroke-dasharray={`${((diskIOHistory[diskIOHistory.length - 1]?.write || 0) / calculateScale(diskIOHistory, "write").max) * 351.86} 351.86`}
+                    stroke-dasharray={`${((diskIOHistory[diskIOHistory.length - 1]?.write || 0) / calculateScale(diskIOHistory, "all").max) * 351.86} 351.86`}
                     stroke-linecap="round"
                   />
                 </svg>
@@ -549,7 +549,7 @@
             <div
               class="flex flex-col justify-between text-xs text-gray-500 mr-2 w-16"
             >
-              {#each calculateScale(diskIOHistory, "read").steps as step}
+              {#each calculateScale(diskIOHistory, "all").steps as step}
                 <span>{(step / (1024 * 1024)).toFixed(1)} MB/s</span>
               {/each}
             </div>
@@ -570,18 +570,17 @@
                 </g>
 
                 {#each diskIOHistory as point, i}
-                  {@const readScale = calculateScale(diskIOHistory, "read")}
-                  {@const writeScale = calculateScale(diskIOHistory, "write")}
+                  {@const diskScale = calculateScale(diskIOHistory, "all")}
                   {@const xPos = (i / diskIOHistory.length) * 100 + "%"}
                   <circle
                     cx={xPos}
-                    cy={100 - (point.read / readScale.max) * 100 + "%"}
+                    cy={100 - (point.read / diskScale.max) * 100 + "%"}
                     r="2"
                     fill="#10B981"
                   />
                   <circle
                     cx={xPos}
-                    cy={100 - (point.write / writeScale.max) * 100 + "%"}
+                    cy={100 - (point.write / diskScale.max) * 100 + "%"}
                     r="2"
                     fill="#F59E0B"
                   />
@@ -591,10 +590,10 @@
                     <line
                       x1={prevXPos}
                       y1={100 -
-                        (diskIOHistory[i - 1].read / readScale.max) * 100 +
+                        (diskIOHistory[i - 1].read / diskScale.max) * 100 +
                         "%"}
                       x2={xPos}
-                      y2={100 - (point.read / readScale.max) * 100 + "%"}
+                      y2={100 - (point.read / diskScale.max) * 100 + "%"}
                       stroke="#10B981"
                       stroke-width="2"
                       stroke-linejoin="round"
@@ -603,10 +602,10 @@
                     <line
                       x1={prevXPos}
                       y1={100 -
-                        (diskIOHistory[i - 1].write / writeScale.max) * 100 +
+                        (diskIOHistory[i - 1].write / diskScale.max) * 100 +
                         "%"}
                       x2={xPos}
-                      y2={100 - (point.write / writeScale.max) * 100 + "%"}
+                      y2={100 - (point.write / diskScale.max) * 100 + "%"}
                       stroke="#F59E0B"
                       stroke-width="2"
                       stroke-linejoin="round"
@@ -657,7 +656,7 @@
                     stroke="#8B5CF6"
                     stroke-width="8"
                     fill="none"
-                    stroke-dasharray={`${((networkIOHistory[networkIOHistory.length - 1]?.rx || 0) / calculateScale(networkIOHistory, "rx").max) * 351.86} 351.86`}
+                    stroke-dasharray={`${((networkIOHistory[networkIOHistory.length - 1]?.rx || 0) / calculateScale(networkIOHistory, "net").max) * 351.86} 351.86`}
                     stroke-linecap="round"
                   />
                 </svg>
@@ -697,7 +696,7 @@
                     stroke="#EC4899"
                     stroke-width="8"
                     fill="none"
-                    stroke-dasharray={`${((networkIOHistory[networkIOHistory.length - 1]?.tx || 0) / calculateScale(networkIOHistory, "tx").max) * 351.86} 351.86`}
+                    stroke-dasharray={`${((networkIOHistory[networkIOHistory.length - 1]?.tx || 0) / calculateScale(networkIOHistory, "net").max) * 351.86} 351.86`}
                     stroke-linecap="round"
                   />
                 </svg>
@@ -724,7 +723,7 @@
             <div
               class="flex flex-col justify-between text-xs text-gray-500 mr-2 w-16"
             >
-              {#each calculateScale(networkIOHistory, "rx").steps as step}
+              {#each calculateScale(networkIOHistory, "net").steps as step}
                 <span>{(step / 1000000).toFixed(1)} Mbps</span>
               {/each}
             </div>
@@ -745,18 +744,17 @@
                 </g>
 
                 {#each networkIOHistory as point, i}
-                  {@const rxScale = calculateScale(networkIOHistory, "rx")}
-                  {@const txScale = calculateScale(networkIOHistory, "tx")}
+                  {@const networkScale = calculateScale(networkIOHistory, "net")}
                   {@const xPos = (i / networkIOHistory.length) * 100 + "%"}
                   <circle
                     cx={xPos}
-                    cy={100 - (point.rx / rxScale.max) * 100 + "%"}
+                    cy={100 - (point.rx / networkScale.max) * 100 + "%"}
                     r="2"
                     fill="#8B5CF6"
                   />
                   <circle
                     cx={xPos}
-                    cy={100 - (point.tx / txScale.max) * 100 + "%"}
+                    cy={100 - (point.tx / networkScale.max) * 100 + "%"}
                     r="2"
                     fill="#EC4899"
                   />
@@ -766,10 +764,10 @@
                     <line
                       x1={prevXPos}
                       y1={100 -
-                        (networkIOHistory[i - 1].rx / rxScale.max) * 100 +
+                        (networkIOHistory[i - 1].rx / networkScale.max) * 100 +
                         "%"}
                       x2={xPos}
-                      y2={100 - (point.rx / rxScale.max) * 100 + "%"}
+                      y2={100 - (point.rx / networkScale.max) * 100 + "%"}
                       stroke="#8B5CF6"
                       stroke-width="2"
                       stroke-linejoin="round"
@@ -778,10 +776,10 @@
                     <line
                       x1={prevXPos}
                       y1={100 -
-                        (networkIOHistory[i - 1].tx / txScale.max) * 100 +
+                        (networkIOHistory[i - 1].tx / networkScale.max) * 100 +
                         "%"}
                       x2={xPos}
-                      y2={100 - (point.tx / txScale.max) * 100 + "%"}
+                      y2={100 - (point.tx / networkScale.max) * 100 + "%"}
                       stroke="#EC4899"
                       stroke-width="2"
                       stroke-linejoin="round"

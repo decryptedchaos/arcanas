@@ -54,6 +54,13 @@ export const storageAPI = {
     method: 'DELETE',
   }),
 
+  // Cleanup legacy pool (from /var/lib/arcanas/)
+  // TODO: Remove this method after migration period (v1.0.0 or later)
+  // DEPRECATED: This is temporary migration helper code
+  cleanupLegacyPool: (poolName) => apiRequest(`/storage-pools/cleanup/${poolName}`, {
+    method: 'DELETE',
+  }),
+
   // Format disk
   formatDisk: (diskData) => apiRequest('/disk/format', {
     method: 'POST',
@@ -151,21 +158,21 @@ export const sambaAPI = {
   }),
 
   // Update Samba share
-  updateShare: (shareId, shareData) => apiRequest(`/samba-shares/${shareId}/`, {
+  updateShare: (shareName, shareData) => apiRequest(`/samba-shares/${shareName}/`, {
     method: 'PUT',
     body: JSON.stringify(shareData),
   }),
 
   // Delete Samba share
-  deleteShare: (shareId) => apiRequest(`/samba-shares`, {
+  deleteShare: (shareName) => apiRequest(`/samba-shares/`, {
     method: 'DELETE',
-    body: JSON.stringify({ name: shareId }),
+    body: JSON.stringify({ name: shareName }),
   }),
 
   // Toggle share availability
-  toggleShare: (shareId) => apiRequest(`/samba-shares`, {
+  toggleShare: (shareName) => apiRequest(`/samba-shares/`, {
     method: 'POST',
-    body: JSON.stringify({ name: shareId }),
+    body: JSON.stringify({ name: shareName }),
   }),
 
   // Get share connections

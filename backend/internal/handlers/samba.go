@@ -212,9 +212,47 @@ func CreateSambaShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(share.Path, 0755); err != nil {
+	// Use 0777 for maximum flexibility, ACLs will restrict further
+	if err := os.MkdirAll(share.Path, 0777); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create directory: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// Set proper permissions based on share type
+	if share.GuestOK {
+		// Guest shares - open permissions
+		if err := setDirectoryPermissions(share.Path, 0777); err != nil {
+			fmt.Printf("Warning: Failed to set directory permissions: %v\n", err)
+		}
+		if err := setDirectoryOwnership(share.Path, "nobody"); err != nil {
+			fmt.Printf("Warning: Failed to set directory ownership: %v\n", err)
+		}
+	} else {
+		// User/group shares
+		if err := setDirectoryPermissions(share.Path, 0770); err != nil {
+			fmt.Printf("Warning: Failed to set directory permissions: %v\n", err)
+		}
+
+		// Set the setgid bit to ensure group inheritance for subdirectories
+		if err := setSetgidBit(share.Path); err != nil {
+			fmt.Printf("Warning: Failed to set setgid bit: %v\n", err)
+		}
+
+		// Set ownership for the first user if specified
+		if len(share.Users) > 0 {
+			userName := share.Users[0]
+			if err := setDirectoryOwnership(share.Path, userName); err != nil {
+				fmt.Printf("Warning: Failed to set directory ownership: %v\n", err)
+			}
+		}
+
+		// Set group ownership for the first group if specified
+		if len(share.Groups) > 0 {
+			groupName := share.Groups[0]
+			if err := setDirectoryGroup(share.Path, groupName); err != nil {
+				fmt.Printf("Warning: Failed to set directory group: %v\n", err)
+			}
+		}
 	}
 
 	// Add share to smb.conf
@@ -251,10 +289,47 @@ func addShareToSmbConf(share models.SambaShare) error {
 	if len(share.Groups) > 0 {
 		config.WriteString(fmt.Sprintf("\tvalid groups = %s\n", strings.Join(share.Groups, ", ")))
 	}
-	config.WriteString(fmt.Sprintf("\tguest ok = %s\n", boolToYesNo(share.GuestOK)))
+	if share.GuestOK {
+		config.WriteString(fmt.Sprintf("\tguest ok = %s\n", boolToYesNo(share.GuestOK)))
+	}
 	config.WriteString(fmt.Sprintf("\tread only = %s\n", boolToYesNo(share.ReadOnly)))
 	config.WriteString(fmt.Sprintf("\tbrowseable = %s\n", boolToYesNo(share.Browseable)))
 	config.WriteString(fmt.Sprintf("\tavailable = %s\n", boolToYesNo(share.Available)))
+
+	// Add permission options for proper file/directory access
+	if share.GuestOK {
+		// Guest shares - allow guest access
+		config.WriteString("\tforce user = nobody\n")
+		config.WriteString("\tforce group = nogroup\n")
+		config.WriteString("\tcreate mask = 0777\n")
+		config.WriteString("\tdirectory mask = 0777\n")
+		config.WriteString("\tforce create mode = 0777\n")
+		config.WriteString("\tforce directory mode = 0777\n")
+	} else if len(share.Users) > 0 {
+		// User-specific shares - set appropriate permissions
+		config.WriteString(fmt.Sprintf("\tforce user = %s\n", share.Users[0]))
+		if len(share.Groups) > 0 {
+			config.WriteString(fmt.Sprintf("\tforce group = %s\n", share.Groups[0]))
+		}
+		config.WriteString("\tcreate mask = 0660\n")
+		config.WriteString("\tdirectory mask = 0770\n")
+		config.WriteString("\tforce create mode = 0660\n")
+		config.WriteString("\tforce directory mode = 0770\n")
+	} else {
+		// Group-based or general shares
+		if len(share.Groups) > 0 {
+			config.WriteString(fmt.Sprintf("\tforce group = %s\n", share.Groups[0]))
+		}
+		config.WriteString("\tcreate mask = 0660\n")
+		config.WriteString("\tdirectory mask = 0770\n")
+		config.WriteString("\tforce create mode = 0660\n")
+		config.WriteString("\tforce directory mode = 0770\n")
+	}
+
+	// Add inheritance options to ensure subdirectories have proper permissions
+	config.WriteString("\tinherit permissions = yes\n")
+	config.WriteString("\tinherit owner = yes\n")
+	config.WriteString("\tmap acl inherit = yes\n")
 
 	// Use wrapper to append to smb.conf
 	return utils.SudoAppendFile("/etc/samba/smb.conf", config.String())
@@ -277,6 +352,44 @@ func UpdateSambaShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Printf("Updating share: %+v\n", share)
+
+	// Update directory permissions if needed
+	if share.GuestOK {
+		// Guest shares - open permissions
+		if err := setDirectoryPermissions(share.Path, 0777); err != nil {
+			fmt.Printf("Warning: Failed to update directory permissions: %v\n", err)
+		}
+		if err := setDirectoryOwnership(share.Path, "nobody"); err != nil {
+			fmt.Printf("Warning: Failed to update directory ownership: %v\n", err)
+		}
+	} else {
+		// User/group shares
+		if err := setDirectoryPermissions(share.Path, 0770); err != nil {
+			fmt.Printf("Warning: Failed to update directory permissions: %v\n", err)
+		}
+
+		// Set the setgid bit to ensure group inheritance for subdirectories
+		if err := setSetgidBit(share.Path); err != nil {
+			fmt.Printf("Warning: Failed to set setgid bit: %v\n", err)
+		}
+
+		// Set ownership for first user if specified
+		if len(share.Users) > 0 {
+			userName := share.Users[0]
+			if err := setDirectoryOwnership(share.Path, userName); err != nil {
+				fmt.Printf("Warning: Failed to update directory ownership: %v\n", err)
+			}
+		}
+
+		// Set group ownership for first group if specified
+		if len(share.Groups) > 0 {
+			groupName := share.Groups[0]
+			if err := setDirectoryGroup(share.Path, groupName); err != nil {
+				fmt.Printf("Warning: Failed to update directory group: %v\n", err)
+			}
+		}
+	}
+
 	// Update share in smb.conf
 	if err := updateShareInSmbConf(share); err != nil {
 		fmt.Printf("Failed to update share in smb.conf: %v\n", err)
@@ -347,10 +460,47 @@ func updateShareInSmbConf(share models.SambaShare) error {
 	if len(share.Groups) > 0 {
 		shareConfig.WriteString(fmt.Sprintf("\tvalid groups = %s\n", strings.Join(share.Groups, ", ")))
 	}
-	shareConfig.WriteString(fmt.Sprintf("\tguest ok = %s\n", boolToYesNo(share.GuestOK)))
+	if share.GuestOK {
+		shareConfig.WriteString(fmt.Sprintf("\tguest ok = %s\n", boolToYesNo(share.GuestOK)))
+	}
 	shareConfig.WriteString(fmt.Sprintf("\tread only = %s\n", boolToYesNo(share.ReadOnly)))
 	shareConfig.WriteString(fmt.Sprintf("\tbrowseable = %s\n", boolToYesNo(share.Browseable)))
 	shareConfig.WriteString(fmt.Sprintf("\tavailable = %s\n", boolToYesNo(share.Available)))
+
+	// Add permission options for proper file/directory access
+	if share.GuestOK {
+		// Guest shares - allow guest access
+		shareConfig.WriteString("\tforce user = nobody\n")
+		shareConfig.WriteString("\tforce group = nogroup\n")
+		shareConfig.WriteString("\tcreate mask = 0777\n")
+		shareConfig.WriteString("\tdirectory mask = 0777\n")
+		shareConfig.WriteString("\tforce create mode = 0777\n")
+		shareConfig.WriteString("\tforce directory mode = 0777\n")
+	} else if len(share.Users) > 0 {
+		// User-specific shares - set appropriate permissions
+		shareConfig.WriteString(fmt.Sprintf("\tforce user = %s\n", share.Users[0]))
+		if len(share.Groups) > 0 {
+			shareConfig.WriteString(fmt.Sprintf("\tforce group = %s\n", share.Groups[0]))
+		}
+		shareConfig.WriteString("\tcreate mask = 0660\n")
+		shareConfig.WriteString("\tdirectory mask = 0770\n")
+		shareConfig.WriteString("\tforce create mode = 0660\n")
+		shareConfig.WriteString("\tforce directory mode = 0770\n")
+	} else {
+		// Group-based or general shares
+		if len(share.Groups) > 0 {
+			shareConfig.WriteString(fmt.Sprintf("\tforce group = %s\n", share.Groups[0]))
+		}
+		shareConfig.WriteString("\tcreate mask = 0660\n")
+		shareConfig.WriteString("\tdirectory mask = 0770\n")
+		shareConfig.WriteString("\tforce create mode = 0660\n")
+		shareConfig.WriteString("\tforce directory mode = 0770\n")
+	}
+
+	// Add inheritance options to ensure subdirectories have proper permissions
+	shareConfig.WriteString("\tinherit permissions = yes\n")
+	shareConfig.WriteString("\tinherit owner = yes\n")
+	shareConfig.WriteString("\tmap acl inherit = yes\n")
 
 	// Insert the new share config
 	var finalLines []string
@@ -405,10 +555,8 @@ func DeleteSambaShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteShareFromSmbConf(shareName string) error {
-	smbConfPath := "/etc/samba/smb.conf"
-
-	// Read entire file
-	content, err := os.ReadFile(smbConfPath)
+	// Read entire file using wrapper
+	content, err := utils.SudoReadFile("/etc/samba/smb.conf")
 	if err != nil {
 		return err
 	}
@@ -444,8 +592,8 @@ func deleteShareFromSmbConf(shareName string) error {
 		return fmt.Errorf("share %s not found", shareName)
 	}
 
-	// Write back to file
-	return os.WriteFile(smbConfPath, []byte(strings.Join(newLines, "\n")), 0644)
+	// Write back to file using wrapper
+	return utils.SudoWriteFile("/etc/samba/smb.conf", strings.Join(newLines, "\n"))
 }
 
 func ToggleSambaShare(w http.ResponseWriter, r *http.Request) {
@@ -480,10 +628,8 @@ func ToggleSambaShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func toggleShareInSmbConf(shareName string) error {
-	smbConfPath := "/etc/samba/smb.conf"
-
-	// Read entire file
-	content, err := os.ReadFile(smbConfPath)
+	// Read entire file using wrapper
+	content, err := utils.SudoReadFile("/etc/samba/smb.conf")
 	if err != nil {
 		return err
 	}
@@ -534,8 +680,8 @@ func toggleShareInSmbConf(shareName string) error {
 		return fmt.Errorf("share %s not found", shareName)
 	}
 
-	// Write back to file
-	return os.WriteFile(smbConfPath, []byte(strings.Join(newLines, "\n")), 0644)
+	// Write back to file using wrapper
+	return utils.SudoWriteFile("/etc/samba/smb.conf", strings.Join(newLines, "\n"))
 }
 
 func reloadSamba() error {
@@ -554,6 +700,43 @@ func reloadSamba() error {
 	}
 
 	return fmt.Errorf("failed to reload Samba service")
+}
+
+func setDirectoryPermissions(path string, mode int) error {
+	// Use sudo chmod to recursively set directory permissions
+	cmd := exec.Command("sudo", "chmod", "-R", fmt.Sprintf("%04o", mode), path)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("chmod failed: %v, output: %s", err, string(output))
+	}
+	return nil
+}
+
+func setSetgidBit(path string) error {
+	// Set the setgid bit on the directory to ensure group inheritance
+	// This makes subdirectories inherit the parent's group ID
+	cmd := exec.Command("sudo", "chmod", "g+s", path)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("chmod g+s failed: %v, output: %s", err, string(output))
+	}
+	return nil
+}
+
+func setDirectoryOwnership(path, username string) error {
+	// Use sudo chown to set directory ownership
+	cmd := exec.Command("sudo", "chown", "-R", username, path)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("chown failed: %v, output: %s", err, string(output))
+	}
+	return nil
+}
+
+func setDirectoryGroup(path, groupname string) error {
+	// Use sudo chgrp to set directory group ownership
+	cmd := exec.Command("sudo", "chgrp", "-R", groupname, path)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("chgrp failed: %v, output: %s", err, string(output))
+	}
+	return nil
 }
 
 func GetSambaConnections(w http.ResponseWriter, r *http.Request) {

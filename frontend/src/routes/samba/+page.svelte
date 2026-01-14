@@ -5,7 +5,7 @@
 -->
 
 <script>
-    import { sambaAPI } from "$lib/api.js";
+    import { sambaAPI, storageAPI } from "$lib/api.js";
     import { onMount } from "svelte";
 
     let shares = [];
@@ -14,6 +14,10 @@
     let showCreateModal = false;
     let showEditModal = false;
     let selectedShare = null;
+
+    // Storage pools data
+    let storagePools = [];
+    let poolsLoading = true;
 
     // Form data for new share
     let newShare = {
@@ -55,7 +59,29 @@
 
     onMount(() => {
         loadShares();
+        loadStoragePools();
     });
+
+    async function loadStoragePools() {
+        try {
+            poolsLoading = true;
+            const result = await storageAPI.getPools();
+
+            // Handle null or undefined responses
+            if (result === null || result === undefined) {
+                storagePools = [];
+            } else if (Array.isArray(result)) {
+                storagePools = result;
+            } else {
+                storagePools = [];
+            }
+        } catch (err) {
+            console.error("Failed to load storage pools:", err);
+            storagePools = [];
+        } finally {
+            poolsLoading = false;
+        }
+    }
 
     function getStatusColor(available) {
         return available
@@ -65,7 +91,7 @@
 
     async function toggleShare(share) {
         try {
-            await sambaAPI.toggleShare(share.id);
+            await sambaAPI.toggleShare(share.name);
             share.available = !share.available;
             shares = [...shares];
         } catch (err) {
@@ -79,7 +105,7 @@
         if (confirm("Are you sure you want to delete this Samba share?")) {
             try {
                 await sambaAPI.deleteShare(shareId);
-                shares = shares.filter((s) => s.id !== shareId);
+                shares = shares.filter((s) => s.name !== shareId);
             } catch (err) {
                 console.error("Failed to delete share:", err);
             }
@@ -88,6 +114,17 @@
 
     async function createShare() {
         try {
+            // Debug logging
+            console.log("Creating share with data:", newShare);
+            console.log("Selected path:", newShare.path);
+            console.log("Available storage pools:", storagePools);
+
+            // Validate that a storage pool is selected
+            if (!newShare.path || newShare.path.trim() === "") {
+                alert("Please select a storage pool for the share path.");
+                return;
+            }
+
             const shareData = {
                 ...newShare,
                 users: newShare.users
@@ -100,12 +137,15 @@
                     .filter(Boolean),
             };
 
+            console.log("Sending share data:", shareData);
+
             const createdShare = await sambaAPI.createShare(shareData);
             shares = [...shares, createdShare];
             showCreateModal = false;
             resetForm();
         } catch (err) {
             console.error("Failed to create share:", err);
+            alert(`Failed to create share: ${err.message || err}`);
         }
     }
 
@@ -291,7 +331,7 @@
                                 </svg>
                             </button>
                             <button
-                                on:click={() => deleteShare(share.id)}
+                                on:click={() => deleteShare(share.name)}
                                 class="p-2 text-gray-400 hover:text-red-600"
                                 title="Delete share"
                                 aria-label="Delete share"
@@ -334,8 +374,12 @@
                     e.key === "Escape" && (showCreateModal = false)}
                 aria-label="Close modal"
             ></div>
-            <div class="relative bg-white rounded-lg max-w-2xl w-full p-6">
-                <h3 class="text-lg font-medium text-gray-900 mb-4">
+            <div
+                class="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6"
+            >
+                <h3
+                    class="text-lg font-medium text-gray-900 dark:text-white mb-4"
+                >
                     Create Samba Share
                 </h3>
                 <form on:submit|preventDefault={createShare} class="space-y-4">
@@ -343,34 +387,86 @@
                         type="text"
                         bind:value={newShare.name}
                         placeholder="Share Name"
-                        class="w-full p-2 border rounded"
+                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                         required
                     />
-                    <input
-                        type="text"
-                        bind:value={newShare.path}
-                        placeholder="Path"
-                        class="w-full p-2 border rounded"
-                        required
-                    />
+                    {#if poolsLoading}
+                        <div
+                            class="w-full p-2 border rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300"
+                        >
+                            Loading storage pools...
+                        </div>
+                    {:else if storagePools.length === 0}
+                        <div
+                            class="w-full p-2 border rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200"
+                        >
+                            No storage pools available. Please create a storage
+                            pool first.
+                        </div>
+                    {:else}
+                        <select
+                            bind:value={newShare.path}
+                            class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                            required
+                        >
+                            <option value="">Select a storage pool</option>
+                            {#each storagePools as pool}
+                                <option value={pool.mount_point}>
+                                    {pool.name} ({pool.type}) - {pool.mount_point}
+                                </option>
+                            {/each}
+                        </select>
+                    {/if}
                     <input
                         type="text"
                         bind:value={newShare.comment}
                         placeholder="Comment"
-                        class="w-full p-2 border rounded"
+                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                     />
                     <input
                         type="text"
                         bind:value={newShare.users}
                         placeholder="Users (comma separated)"
-                        class="w-full p-2 border rounded"
+                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                     />
                     <input
                         type="text"
                         bind:value={newShare.groups}
                         placeholder="Groups (comma separated)"
-                        class="w-full p-2 border rounded"
+                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                     />
+                    <div class="space-y-2">
+                        <label class="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                bind:checked={newShare.guest_ok}
+                                class="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            <span class="text-sm text-gray-700 dark:text-gray-300"
+                                >Allow guest access</span
+                            >
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                bind:checked={newShare.read_only}
+                                class="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            <span class="text-sm text-gray-700 dark:text-gray-300"
+                                >Read only</span
+                            >
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                bind:checked={newShare.browseable}
+                                class="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            <span class="text-sm text-gray-700 dark:text-gray-300"
+                                >Browseable</span
+                            >
+                        </label>
+                    </div>
                     <div class="flex space-x-2">
                         <button
                             type="button"
@@ -406,8 +502,12 @@
                     e.key === "Escape" && (showEditModal = false)}
                 aria-label="Close modal"
             ></div>
-            <div class="relative bg-white rounded-lg max-w-2xl w-full p-6">
-                <h3 class="text-lg font-medium text-gray-900 mb-4">
+            <div
+                class="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6"
+            >
+                <h3
+                    class="text-lg font-medium text-gray-900 dark:text-white mb-4"
+                >
                     Edit Samba Share
                 </h3>
                 <form on:submit|preventDefault={updateShare} class="space-y-4">
@@ -415,34 +515,96 @@
                         type="text"
                         bind:value={editShare.name}
                         placeholder="Share Name"
-                        class="w-full p-2 border rounded"
+                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                         required
                     />
-                    <input
-                        type="text"
-                        bind:value={editShare.path}
-                        placeholder="Path"
-                        class="w-full p-2 border rounded"
-                        required
-                    />
+                    {#if poolsLoading}
+                        <div
+                            class="w-full p-2 border rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300"
+                        >
+                            Loading storage pools...
+                        </div>
+                    {:else if storagePools.length === 0}
+                        <div
+                            class="w-full p-2 border rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200"
+                        >
+                            No storage pools available. Please create a storage
+                            pool first.
+                        </div>
+                    {:else}
+                        <select
+                            bind:value={editShare.path}
+                            class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                            required
+                        >
+                            <option value="">Select a storage pool</option>
+                            {#each storagePools as pool}
+                                <option value={pool.mount_point}>
+                                    {pool.name} ({pool.type}) - {pool.mount_point}
+                                </option>
+                            {/each}
+                        </select>
+                    {/if}
                     <input
                         type="text"
                         bind:value={editShare.comment}
                         placeholder="Comment"
-                        class="w-full p-2 border rounded"
+                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                     />
                     <input
                         type="text"
                         bind:value={editShare.users}
                         placeholder="Users (comma separated)"
-                        class="w-full p-2 border rounded"
+                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                     />
                     <input
                         type="text"
                         bind:value={editShare.groups}
                         placeholder="Groups (comma separated)"
-                        class="w-full p-2 border rounded"
+                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
                     />
+                    <div class="space-y-2">
+                        <label class="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                bind:checked={editShare.guest_ok}
+                                class="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            <span class="text-sm text-gray-700 dark:text-gray-300"
+                                >Allow guest access</span
+                            >
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                bind:checked={editShare.read_only}
+                                class="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            <span class="text-sm text-gray-700 dark:text-gray-300"
+                                >Read only</span
+                            >
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                bind:checked={editShare.browseable}
+                                class="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            <span class="text-sm text-gray-700 dark:text-gray-300"
+                                >Browseable</span
+                            >
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                bind:checked={editShare.available}
+                                class="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            <span class="text-sm text-gray-700 dark:text-gray-300"
+                                >Available</span
+                            >
+                        </label>
+                    </div>
                     <div class="flex space-x-2">
                         <button
                             type="button"

@@ -37,12 +37,33 @@
     let showDetailsModal = false;
     let selectedPoolDetails = null;
     let openDropdown = null; // Track which dropdown is open
+    let showCreatePoolModal = false;
+
+    // Notification system
+    let notifications = [];
+    let notificationId = 0;
+
+    function showNotification(message, type = 'info') {
+        const id = ++notificationId;
+        notifications = [...notifications, { id, message, type }];
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            notifications = notifications.filter(n => n.id !== id);
+        }, 5000);
+    }
+
+    function clearNotification(id) {
+        notifications = notifications.filter(n => n.id !== id);
+    }
 
     async function loadDiskStats() {
         try {
             error = null;
             const newStats = await diskAPI.getDiskStats();
-            if (JSON.stringify(newStats) !== JSON.stringify(diskStats)) {
+            // More efficient comparison - check length first, then individual items
+            if (newStats.length !== diskStats.length || 
+                newStats.some((disk, index) => JSON.stringify(disk) !== JSON.stringify(diskStats[index]))) {
                 diskStats = newStats;
             }
         } catch (err) {
@@ -76,7 +97,7 @@
             if (result === null || result === undefined) {
                 console.warn("Storage pools API returned null/undefined");
                 storagePools = [];
-            } else if (Array.isArray(result)) {
+} else if (Array.isArray(result)) {
                 storagePools = result;
             } else {
                 console.warn("Storage pools API returned non-array:", result);
@@ -130,7 +151,7 @@
             deleteConfirmation = "";
         } catch (err) {
             console.error("Failed to delete pool:", err);
-            alert("Failed to delete pool: " + err.message);
+            showNotification("Failed to delete pool: " + err.message, "error");
         }
     }
 
@@ -153,7 +174,62 @@
         openDropdown = null;
     }
 
+    // Form data for creating storage pool
+    let newPool = {
+        name: "",
+        type: "mergerfs",
+        devices: [], // Array of selected device paths
+        config: ""
+    };
+
+    async function createStoragePool() {
+        try {
+            if (!newPool.name) {
+                showNotification("Please enter a pool name", "warning");
+                return;
+            }
+            if (!newPool.devices || newPool.devices.length === 0) {
+                showNotification("Please select at least one disk", "warning");
+                return;
+            }
+
+            // devices is already an array
+            const poolData = {
+                name: newPool.name,
+                type: newPool.type,
+                devices: newPool.devices,
+                config: newPool.config
+            };
+
+            await storageAPI.createPool(poolData);
+            showCreatePoolModal = false;
+            resetPoolForm();
+            await loadStoragePools();
+        } catch (err) {
+            console.error("Failed to create storage pool:", err);
+            showNotification("Failed to create storage pool: " + err.message, "error");
+        }
+    }
+
+    function resetPoolForm() {
+        newPool = {
+            name: "",
+            type: "mergerfs",
+            devices: [],
+            config: ""
+        };
+    }
+
+    function toggleDevice(devicePath) {
+        if (newPool.devices.includes(devicePath)) {
+            newPool.devices = newPool.devices.filter(d => d !== devicePath);
+        } else {
+            newPool.devices = [...newPool.devices, devicePath];
+        }
+    }
+
     function toggleDiskExpansion(diskName) {
+        if (!diskName) return; // Guard against undefined
         if (expandedDisks.has(diskName)) {
             expandedDisks.delete(diskName);
         } else {
@@ -191,6 +267,29 @@
 </script>
 
 <div class="p-6" role="main" tabindex="-1">
+    <!-- Notifications -->
+    {#if notifications.length > 0}
+        <div class="fixed top-4 right-4 z-50 space-y-2">
+            {#each notifications as notification (notification.id)}
+                <div 
+                    class="p-4 rounded-md shadow-lg flex items-center justify-between max-w-sm animate-pulse
+                        {notification.type === 'error' ? 'bg-red-50 border border-red-200 text-red-700' : ''}
+                        {notification.type === 'warning' ? 'bg-yellow-50 border border-yellow-200 text-yellow-700' : ''}
+                        {notification.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' : ''}
+                        {notification.type === 'info' ? 'bg-blue-50 border border-blue-200 text-blue-700' : ''}"
+                >
+                    <span class="text-sm font-medium">{notification.message}</span>
+                    <button 
+                        on:click={() => clearNotification(notification.id)}
+                        class="ml-4 text-sm underline hover:no-underline"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            {/each}
+        </div>
+    {/if}
+
     <div class="mb-6">
         <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
             Storage Management
@@ -251,7 +350,12 @@
         {:else if activeTab === "raid"}
             <button class="btn btn-primary">Create RAID Array</button>
         {:else if activeTab === "pools"}
-            <button class="btn btn-primary">Create Storage Pool</button>
+            <button
+                on:click={() => (showCreatePoolModal = true)}
+                class="btn btn-primary"
+            >
+                Create Storage Pool
+            </button>
         {/if}
     </div>
 
@@ -304,14 +408,16 @@
                                             <h3
                                                 class="text-lg font-semibold text-gray-900 dark:text-white"
                                             >
-                                                {disk.name}
+                                                {disk.name || disk.device || "Unknown"}
                                             </h3>
                                             <span
                                                 class="px-2 py-1 text-xs font-medium rounded-full {getHealthColor(
-                                                    disk.health,
+                                                    disk.smart?.status ||
+                                                        disk.health ||
+                                                        "Unknown",
                                                 )}"
                                             >
-                                                {disk.health || "Unknown"}
+                                                {disk.smart?.status || disk.health || "Unknown"}
                                             </span>
                                         </div>
                                         <p
@@ -331,20 +437,21 @@
                                                 <p
                                                     class="font-medium text-gray-900 dark:text-white"
                                                 >
-                                                    {disk.size}
+                                                    {formatBytes(disk.size || 0)}
                                                 </p>
                                             </div>
                                             <div>
                                                 <p
                                                     class="text-gray-500 dark:text-gray-400"
                                                 >
-                                                    Interface
+                                                    Used
                                                 </p>
                                                 <p
                                                     class="font-medium text-gray-900 dark:text-white"
                                                 >
-                                                    {disk.interface ||
-                                                        "Unknown"}
+                                                    {disk.usage
+                                                        ? disk.usage.toFixed(1) + "%"
+                                                        : "N/A"}
                                                 </p>
                                             </div>
                                             <div>
@@ -356,27 +463,29 @@
                                                 <p
                                                     class="font-medium text-gray-900 dark:text-white"
                                                 >
-                                                    {disk.temperature || "N/A"}
+                                                    {disk.smart?.temperature
+                                                        ? disk.smart.temperature +
+                                                            "°C"
+                                                        : "N/A"}
                                                 </p>
                                             </div>
                                             <div>
                                                 <p
                                                     class="text-gray-500 dark:text-gray-400"
                                                 >
-                                                    Serial
+                                                    Filesystem
                                                 </p>
                                                 <p
                                                     class="font-medium text-gray-900 dark:text-white"
                                                 >
-                                                    {disk.serial_number ||
-                                                        "N/A"}
+                                                    {disk.filesystem || "Unknown"}
                                                 </p>
                                             </div>
                                         </div>
                                     </div>
                                     <button
                                         on:click={() =>
-                                            toggleDiskExpansion(disk.name)}
+                                            toggleDiskExpansion(disk.name || disk.device)}
                                         class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                                         title="Toggle disk details"
                                         aria-label="Toggle disk details"
@@ -397,11 +506,11 @@
                                     </button>
                                 </div>
                             </div>
-                            {#if expandedDisks.has(disk.name)}
+                            {#if expandedDisks.has(disk.name || disk.device)}
                                 <div
-                                    class="border-t border-gray-200 p-6 bg-gray-50"
+                                    class="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-900/50"
                                 >
-                                    <h4 class="font-medium text-gray-900 mb-4">
+                                    <h4 class="font-medium text-gray-900 dark:text-white mb-4">
                                         Detailed Information
                                     </h4>
                                     <div
@@ -411,11 +520,20 @@
                                             <p
                                                 class="text-gray-500 dark:text-gray-400"
                                             >
+                                                Device Path
+                                            </p>
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {disk.device || "Unknown"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-gray-500 dark:text-gray-400"
+                                            >
                                                 Mount Point
                                             </p>
-                                            <p class="font-medium">
-                                                {disk.mount_point ||
-                                                    "Not mounted"}
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {disk.mountpoint || "Not mounted"}
                                             </p>
                                         </div>
                                         <div>
@@ -424,7 +542,7 @@
                                             >
                                                 Filesystem
                                             </p>
-                                            <p class="font-medium">
+                                            <p class="font-medium text-gray-900 dark:text-white">
                                                 {disk.filesystem || "Unknown"}
                                             </p>
                                         </div>
@@ -434,8 +552,8 @@
                                             >
                                                 Used Space
                                             </p>
-                                            <p class="font-medium">
-                                                {disk.used || "N/A"}
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {formatBytes(disk.used || 0)}
                                             </p>
                                         </div>
                                         <div>
@@ -444,8 +562,54 @@
                                             >
                                                 Available Space
                                             </p>
-                                            <p class="font-medium">
-                                                {disk.available || "N/A"}
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {formatBytes(disk.available || 0)}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-gray-500 dark:text-gray-400"
+                                            >
+                                                Usage Percentage
+                                            </p>
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {disk.usage
+                                                    ? disk.usage.toFixed(2) + "%"
+                                                    : "N/A"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-gray-500 dark:text-gray-400"
+                                            >
+                                                Read-Only
+                                            </p>
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {disk.read_only
+                                                    ? "Yes"
+                                                    : "No"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-gray-500 dark:text-gray-400"
+                                            >
+                                                SMART Health
+                                            </p>
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {disk.smart?.health
+                                                    ? disk.smart.health + "%"
+                                                    : "N/A"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-gray-500 dark:text-gray-400"
+                                            >
+                                                SMART Status
+                                            </p>
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {disk.smart?.status || "Unknown"}
                                             </p>
                                         </div>
                                     </div>
@@ -833,7 +997,8 @@
                         >
                             <path
                                 fill-rule="evenodd"
-                                d="M8.257 3.099c.765-1.36 1.604-2.856 1.604-2.856.765-1.36 1.604.765-1.36-2.856 0-2.856.765-1.36 2.856.765 1.36 2.856-2.856.765-1.36 2.856v-8.48c0-3.732-3.099-8.48-8.48 0-8.48 3.099 8.48 8.48 3.099 8.48z"
+                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                clip-rule="evenodd"
                             />
                         </svg>
                         <h3
@@ -1029,6 +1194,158 @@
                         >
                             Close
                         </button>
+                    </div>
+                </div>
+            </div>
+        {/if}
+
+        <!-- Create Storage Pool Modal -->
+        {#if showCreatePoolModal}
+            <div
+                class="fixed inset-0 z-50 overflow-y-auto"
+                on:click={() => {
+                    showCreatePoolModal = false;
+                    resetPoolForm();
+                }}
+            >
+                <div class="flex items-center justify-center min-h-screen px-4">
+                    <div
+                        class="fixed inset-0 bg-gray-500 bg-opacity-75"
+                        role="button"
+                        tabindex="0"
+                        on:click={() => {
+                            showCreatePoolModal = false;
+                            resetPoolForm();
+                        }}
+                        on:keydown={(e) =>
+                            e.key === "Escape" && (showCreatePoolModal = false)}
+                        aria-label="Close modal"
+                    ></div>
+                    <div
+                        class="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6"
+                        on:click|stopPropagation
+                    >
+                        <h3
+                            class="text-lg font-medium text-gray-900 dark:text-white mb-4"
+                        >
+                            Create Storage Pool
+                        </h3>
+                        <form on:submit|preventDefault={createStoragePool} class="space-y-4">
+                            <div>
+                                <label
+                                    for="poolName"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                                >
+                                    Pool Name
+                                </label>
+                                <input
+                                    id="poolName"
+                                    type="text"
+                                    bind:value={newPool.name}
+                                    placeholder="my-pool"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    for="poolType"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                                >
+                                    Pool Type
+                                </label>
+                                <select
+                                    id="poolType"
+                                    bind:value={newPool.type}
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="mergerfs">MergerFS (JBOD)</option>
+                                    <option value="lvm">LVM (RAID-like)</option>
+                                    <option value="bind">Bind Mount</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Select Disks
+                                </label>
+                                {#if diskStats.length === 0}
+                                    <div class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center">
+                                        No disks available. Please add disks to the system first.
+                                    </div>
+                                {:else}
+                                    <div class="border border-gray-300 dark:border-gray-600 rounded-md p-4 max-h-60 overflow-y-auto bg-gray-50 dark:bg-gray-700">
+                                        {#each diskStats as disk}
+                                            {#if disk.device && disk.device !== ""}
+                                                <label class="flex items-center space-x-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-600 rounded cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={newPool.devices.includes(disk.device)}
+                                                        on:change={() => toggleDevice(disk.device)}
+                                                        class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-800"
+                                                    />
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center space-x-2">
+                                                            <span class="font-medium text-gray-900 dark:text-white">
+                                                                {disk.name || disk.device}
+                                                            </span>
+                                                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                                ({disk.model || "Unknown model"})
+                                                            </span>
+                                                        </div>
+                                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                            {disk.device} • {formatBytes(disk.size || 0)}
+                                                            {#if disk.filesystem}
+                                                                • {disk.filesystem}
+                                                            {/if}
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            {/if}
+                                        {/each}
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                        {newPool.devices.length} disk(s) selected
+                                    </p>
+                                {/if}
+                            </div>
+
+                            <div>
+                                <label
+                                    for="poolConfig"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                                >
+                                    Mount Options (optional)
+                                </label>
+                                <input
+                                    id="poolConfig"
+                                    type="text"
+                                    bind:value={newPool.config}
+                                    placeholder="defaults,allow_other,use_ino"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                />
+                            </div>
+
+                            <div class="flex justify-end space-x-3 mt-6">
+                                <button
+                                    type="button"
+                                    on:click={() => {
+                                        showCreatePoolModal = false;
+                                        resetPoolForm();
+                                    }}
+                                    class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                >
+                                    Create Pool
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>

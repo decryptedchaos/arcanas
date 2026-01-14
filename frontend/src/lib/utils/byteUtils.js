@@ -1,5 +1,5 @@
 /**
- * Byte conversion utilities for the entire frontend
+ * Byte conversion utilities for entire frontend
  * Provides consistent formatting across all components
  */
 
@@ -67,11 +67,11 @@ export function getByteUnit(bytes) {
 }
 
 /**
- * Convert bytes to the specified unit
+ * Convert bytes to specified unit
  * @param {number} bytes - Number of bytes to convert
  * @param {string} targetUnit - Target unit ('B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB')
  * @param {number} decimals - Number of decimal places (default: 1)
- * @returns {number} Value in the target unit
+ * @returns {number} Value in target unit
  */
 export function convertToUnit(bytes, targetUnit, decimals = 1) {
   if (bytes === 0 || bytes === null || bytes === undefined) return 0;
@@ -139,15 +139,28 @@ export function getUsageBgColorClass(percentage) {
 /**
  * Calculate Y-axis scale for graphs with dynamic padding
  * @param {Array} history - Array of data points with timestamp and values
- * @param {string} key - Key to extract from data points (e.g., 'rx', 'tx', 'read', 'write', 'value')
+ * @param {string} key - Key to extract from data points (e.g., 'rx', 'tx', 'read', 'write', 'value', 'all', 'net')
  * @returns {Object} Scale object with max and steps array
  */
 export function calculateScale(history, key) {
   if (!history || history.length === 0)
     return { max: 100, steps: [100, 75, 50, 25, 0] };
 
-  const values = history.map((point) => point[key] || 0);
-  const maxValue = Math.max(...values, 1);
+  let values;
+  let maxValue;
+
+  // Handle 'all' key for unified disk I/O scaling
+  if (key === 'all') {
+    // Combine read and write values to find the maximum
+    values = history.flatMap((point) => [point.read || 0, point.write || 0]);
+  } else if (key === 'net') {
+    // Combine rx and tx values to find the maximum
+    values = history.flatMap((point) => [point.rx || 0, point.tx || 0]);
+  } else {
+    values = history.map((point) => point[key] || 0);
+  }
+
+  maxValue = Math.max(...values, 1);
 
   // Handle CPU percentage values differently (0-100 scale)
   if (key === 'value') {
@@ -169,26 +182,14 @@ export function calculateScale(history, key) {
   }
 
   // For network/disk I/O values (bytes/sec), convert to display units for scaling
-  const displayValue = key === 'rx' || key === 'tx' ? maxValue / 1000000 : maxValue / (1024 * 1024);
+  const isNetwork = key === 'rx' || key === 'tx' || key === 'net';
+  const displayValue = isNetwork ? maxValue / 1000000 : maxValue / (1024 * 1024);
 
-  // Add more padding for 3-digit values and dynamic scaling
-  let scaledMax;
-  if (displayValue >= 1000) {
-    scaledMax = Math.ceil(displayValue * 1.5); // 50% padding for large values
-  } else if (displayValue >= 100) {
-    scaledMax = Math.ceil(displayValue * 1.3); // 30% padding for 3-digit values
-  } else if (displayValue >= 10) {
-    scaledMax = Math.ceil(displayValue * 1.2); // 20% padding for 2-digit values
-  } else {
-    scaledMax = Math.ceil(displayValue * 2); // 100% padding for small values to ensure visibility
-  }
+  // Find nearest power of 10 or clean number for scaling
+  let scaledMax = calculateNiceScale(displayValue);
 
-  // Ensure minimum scale for better visibility
-  if (scaledMax < 1) scaledMax = 1;
-  if (scaledMax < 10 && displayValue < 5) scaledMax = 5; // Minimum for network graphs
-
-  // Convert back to original units for the scale
-  const finalMax = key === 'rx' || key === 'tx' ? scaledMax * 1000000 : scaledMax * 1024 * 1024;
+  // Convert back to original units for scale
+  const finalMax = isNetwork ? scaledMax * 1000000 : scaledMax * 1024 * 1024;
 
   // Generate nice round steps
   const step = finalMax / 4;
@@ -201,4 +202,33 @@ export function calculateScale(history, key) {
   ];
 
   return { max: finalMax, steps };
+}
+
+/**
+ * Calculate a nice round scale value for graphs
+ * @param {number} value - Maximum value to scale
+ * @returns {number} Nice round scale value
+ */
+function calculateNiceScale(value) {
+  if (value === 0) return 10;
+
+  // Add 10-20% padding
+  const paddedValue = value * 1.1;
+
+  // Find the power of 10
+  const exponent = Math.floor(Math.log10(paddedValue));
+  const base = Math.pow(10, exponent);
+
+  // Find the nice step
+  const fraction = paddedValue / base;
+
+  if (fraction <= 1) {
+    return 1 * base;
+  } else if (fraction <= 2) {
+    return 2 * base;
+  } else if (fraction <= 5) {
+    return 5 * base;
+  } else {
+    return 10 * base;
+  }
 }

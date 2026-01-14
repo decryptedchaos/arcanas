@@ -59,6 +59,14 @@ func SetupRoutes() *http.ServeMux {
 		}
 	})
 	mux.HandleFunc("/api/storage-pools/", func(w http.ResponseWriter, r *http.Request) {
+		// Check if this is a cleanup endpoint
+		// TODO: Remove this cleanup endpoint after migration period (v1.0.0 or later)
+		// DEPRECATED: This is temporary migration helper code
+		if strings.HasPrefix(r.URL.Path, "/api/storage-pools/cleanup/") {
+			handlers.CleanupLegacyPool(w, r)
+			return
+		}
+
 		switch r.Method {
 		case http.MethodPut:
 			handlers.UpdateStoragePool(w, r)

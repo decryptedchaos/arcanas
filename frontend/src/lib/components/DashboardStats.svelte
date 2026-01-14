@@ -138,10 +138,10 @@
 <!-- Dashboard Stats - Always Rendered -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
   <!-- CPU Usage -->
-  <div class="stat-card">
+  <div class="stat-card group">
     <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">
+      <div class="flex-1">
+        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
           CPU Usage
         </p>
         <p class="text-2xl font-bold text-gray-900 dark:text-white">
@@ -151,9 +151,11 @@
           {stats?.cpu?.cores || 0} cores
         </p>
       </div>
-      <div class="p-3 bg-blue-100 rounded-full">
+      <div
+        class="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-full group-hover:scale-110 transition-transform duration-200"
+      >
         <svg
-          class="h-6 w-6 text-blue-600"
+          class="h-6 w-6 text-blue-600 dark:text-blue-400"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -168,9 +170,11 @@
       </div>
     </div>
     <div class="mt-4">
-      <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+      <div
+        class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+      >
         <div
-          class="bg-blue-600 h-2 rounded-full transition-all duration-500"
+          class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 ease-out"
           style="width: {stats?.cpu?.usage || 0}%"
         ></div>
       </div>
@@ -178,10 +182,10 @@
   </div>
 
   <!-- Memory Usage -->
-  <div class="stat-card">
+  <div class="stat-card group">
     <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">
+      <div class="flex-1">
+        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
           Memory
         </p>
         <p class="text-2xl font-bold text-gray-900 dark:text-white">
@@ -192,9 +196,11 @@
             ?.totalFormatted || "0 B"}
         </p>
       </div>
-      <div class="p-3 bg-green-100 rounded-full">
+      <div
+        class="p-3 bg-emerald-100 dark:bg-emerald-900/20 rounded-full group-hover:scale-110 transition-transform duration-200"
+      >
         <svg
-          class="h-6 w-6 text-green-600"
+          class="h-6 w-6 text-emerald-600 dark:text-emerald-400"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -209,9 +215,11 @@
       </div>
     </div>
     <div class="mt-4">
-      <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+      <div
+        class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+      >
         <div
-          class="bg-green-600 h-2 rounded-full transition-all duration-500"
+          class="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500 ease-out"
           style="width: {stats?.memory?.percentage || 0}%"
         ></div>
       </div>
@@ -219,10 +227,10 @@
   </div>
 
   <!-- Storage Usage -->
-  <div class="stat-card">
+  <div class="stat-card group">
     <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">
+      <div class="flex-1">
+        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
           Storage
         </p>
         <p class="text-2xl font-bold text-gray-900 dark:text-white">
@@ -233,9 +241,11 @@
             ?.totalFormatted || "0 B"}
         </p>
       </div>
-      <div class="p-3 bg-purple-100 rounded-full">
+      <div
+        class="p-3 bg-purple-100 dark:bg-purple-900/20 rounded-full group-hover:scale-110 transition-transform duration-200"
+      >
         <svg
-          class="h-6 w-6 text-purple-600"
+          class="h-6 w-6 text-purple-600 dark:text-purple-400"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -250,9 +260,11 @@
       </div>
     </div>
     <div class="mt-4">
-      <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+      <div
+        class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+      >
         <div
-          class="bg-purple-600 h-2 rounded-full transition-all duration-500"
+          class="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500 ease-out"
           style="width: {stats?.storage?.percentage || 0}%"
         ></div>
       </div>

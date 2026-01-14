@@ -20,7 +20,8 @@ import (
 )
 
 func GetStoragePools() ([]models.StoragePool, error) {
-	var pools []models.StoragePool
+	// Initialize as empty slice to avoid null JSON encoding
+	pools := make([]models.StoragePool, 0)
 
 	// Get mergerfs mounts (JBOD pools)
 	// Get mergerfs mounts (JBOD pools)
@@ -40,12 +41,12 @@ func GetStoragePools() ([]models.StoragePool, error) {
 					target, _ := mount["target"].(string)
 
 					// Only list arcanas pools
-					if !strings.HasPrefix(target, "/var/lib/arcanas/") {
+					if !strings.HasPrefix(target, "/srv/") {
 						continue
 					}
 
 					pool := models.StoragePool{
-						Name:       strings.TrimPrefix(target, "/var/lib/arcanas/"),
+						Name:       strings.TrimPrefix(target, "/srv/"),
 						Type:       "mergerfs",
 						MountPoint: target,
 						State:      "active",
@@ -73,7 +74,7 @@ func GetStoragePools() ([]models.StoragePool, error) {
 	}
 
 	// Check for existing pool directories (even if not mounted)
-	arcanasDir := "/var/lib/arcanas"
+	arcanasDir := "/srv"
 	if dirEntries, err := os.ReadDir(arcanasDir); err == nil {
 		for _, entry := range dirEntries {
 			if !entry.IsDir() {
@@ -81,6 +82,11 @@ func GetStoragePools() ([]models.StoragePool, error) {
 			}
 
 			poolName := entry.Name()
+
+			// Skip system directories
+			if poolName == "ftp" || poolName == "http" {
+				continue
+			}
 			poolPath := filepath.Join(arcanasDir, poolName)
 
 			// Skip if already detected as mounted pool
@@ -146,38 +152,63 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 	}
 
 	// Ensure data directory exists and has proper permissions
-	cmd := exec.Command("sudo", "mkdir", "-p", "/var/lib/arcanas")
+	cmd := exec.Command("sudo", "mkdir", "-p", "/srv")
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create data directory /var/lib/arcanas: %v, output: %s", err, string(output))
+		return fmt.Errorf("failed to create data directory /srv: %v, output: %s", err, string(output))
 	}
 
 	// Set ownership of data directory to arcanas user if it exists
-	cmd = exec.Command("sudo", "chown", "-R", "arcanas:arcanas", "/var/lib/arcanas")
+	cmd = exec.Command("sudo", "chown", "-R", "arcanas:arcanas", "/srv")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// Log warning but don't fail if arcanas user doesn't exist
 		fmt.Printf("Warning: failed to set data directory ownership: %v, output: %s\n", err, string(output))
 	}
 
 	// Create mount point for the POOL
-	mountPoint := "/var/lib/arcanas/" + req.Name
+	mountPoint := "/srv/" + req.Name
 	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create pool mount point %s: %v, output: %s", mountPoint, err, string(output))
 	}
 
 	// Build mergerfs command using MOUNT POINTS, not raw devices
+	// MergerFS requires paths to be separated by colons
+	// Use a special syntax to ensure proper parsing: /path1:/path2
 	devicesStr := strings.Join(sourcePaths, ":")
+
 	config := req.Config
 	if config == "" {
 		config = "defaults,allow_other,use_ino"
 	}
 
 	// Mount with mergerfs using sudo
+	// The source will be displayed as "b:c" in df due to path truncation, but the mount works correctly
 	cmd = exec.Command("sudo", "mergerfs", devicesStr, mountPoint, "-o", config)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// Cleanup mount point on failure
 		exec.Command("sudo", "rmdir", mountPoint).Run()
 		return fmt.Errorf("failed to mount mergerfs: %v, output: %s", err, string(output))
+	}
+
+	// Verify the mount was successful
+	if !isMounted(mountPoint) {
+		exec.Command("sudo", "rmdir", mountPoint).Run()
+		return fmt.Errorf("mergerfs mount verification failed for %s", mountPoint)
+	}
+
+	// Set permissions for the mounted pool so Samba and other services can access it
+	// Set ownership to allow Samba to write (nogroup is the default guest account)
+	cmd = exec.Command("sudo", "chown", "-R", "nobody:nogroup", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Log warning but don't fail - this might not be critical
+		fmt.Printf("Warning: failed to set pool ownership: %v, output: %s\n", err, string(output))
+	}
+
+	// Set permissions to allow read/write access
+	cmd = exec.Command("sudo", "chmod", "-R", "0777", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Log warning but don't fail
+		fmt.Printf("Warning: failed to set pool permissions: %v, output: %s\n", err, string(output))
 	}
 
 	// Add pool to fstab for persistence
@@ -197,14 +228,21 @@ func prepareDiskForPool(device string) (string, error) {
 		return strings.TrimSpace(string(output)), nil
 	}
 
-	// 2. Format disk (ext4) if needed
-	// Note: blindly formatting for now as usually this UI implies "use this disk"
-	// Ideally we check if it has a FS, but for a new pool setup on raw disks, format is expected.
-	// Use -F to force if it looks like it has a partition table (safe assuming user selected it for use)
-	fmt.Printf("Formatting device %s...\n", device)
-	formatCmd := exec.Command("sudo", "mkfs.ext4", "-F", device)
-	if out, err := formatCmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("mkfs.ext4 failed: %v %s", err, string(out))
+	// 2. Check if device has a filesystem already
+	cmd = exec.Command("blkid", "-o", "value", "-s", "TYPE", device)
+	fsOutput, err := cmd.Output()
+	hasFilesystem := err == nil && len(strings.TrimSpace(string(fsOutput))) > 0
+
+	if hasFilesystem {
+		fmt.Printf("Device %s already has filesystem, skipping format\n", device)
+	} else {
+		// Format disk (ext4) if needed
+		// Use -F to force if it looks like it has a partition table
+		fmt.Printf("Formatting device %s...\n", device)
+		formatCmd := exec.Command("sudo", "mkfs.ext4", "-F", device)
+		if out, err := formatCmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("mkfs.ext4 failed: %v %s", err, string(out))
+		}
 	}
 
 	// 3. Create persistent mount point
@@ -222,10 +260,14 @@ func prepareDiskForPool(device string) (string, error) {
 	}
 
 	// 5. Add to fstab (for disk persistence)
-	// UUID is safer, but device path used for simplicity consistent with current architecture
-	// We'll use UUID if possible in future, for now device path.
-	fstabEntry := fmt.Sprintf("%s %s ext4 defaults 0 0\n", device, mountPath)
-	exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry)).Run()
+	// Check if entry already exists to avoid duplicates
+	cmd = exec.Command("grep", "-q", mountPath, "/etc/fstab")
+	if err != nil {
+		// Not found in fstab, add it
+		// UUID is safer, but device path used for simplicity
+		fstabEntry := fmt.Sprintf("%s %s ext4 defaults 0 0\n", device, mountPath)
+		exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry)).Run()
+	}
 
 	return mountPath, nil
 }
@@ -235,38 +277,58 @@ func createBindMountPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("bind mount pools require exactly one device")
 	}
 
+	// Verify the source path exists
+	sourcePath := req.Devices[0]
+	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
+		return fmt.Errorf("source path %s does not exist", sourcePath)
+	}
+
 	// Ensure data directory exists and has proper permissions
-	cmd := exec.Command("sudo", "mkdir", "-p", "/var/lib/arcanas")
+	cmd := exec.Command("sudo", "mkdir", "-p", "/srv")
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create data directory /var/lib/arcanas: %v, output: %s", err, string(output))
+		return fmt.Errorf("failed to create data directory /srv: %v, output: %s", err, string(output))
 	}
 
 	// Set ownership of data directory to arcanas user if it exists
-	cmd = exec.Command("sudo", "chown", "-R", "arcanas:arcanas", "/var/lib/arcanas")
+	cmd = exec.Command("sudo", "chown", "-R", "arcanas:arcanas", "/srv")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// Log warning but don't fail if arcanas user doesn't exist
 		fmt.Printf("Warning: failed to set data directory ownership: %v, output: %s\n", err, string(output))
 	}
 
 	// Create mount point using sudo
-	mountPoint := "/var/lib/arcanas/" + req.Name
+	mountPoint := "/srv/" + req.Name
 	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create mount point: %v", err)
 	}
 
 	// Create bind mount
-	cmd = exec.Command("mount", "--bind", req.Devices[0], mountPoint)
-	if err := cmd.Run(); err != nil {
+	cmd = exec.Command("sudo", "mount", "--bind", sourcePath, mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
 		// Cleanup mount point on failure
-		exec.Command("rmdir", mountPoint).Run()
-		return fmt.Errorf("failed to create bind mount: %v", err)
+		exec.Command("sudo", "rmdir", mountPoint).Run()
+		return fmt.Errorf("failed to create bind mount: %v, output: %s", err, string(output))
+	}
+
+	// Set permissions for the mounted pool
+	cmd = exec.Command("sudo", "chown", "-R", "nobody:nogroup", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: failed to set pool ownership: %v, output: %s\n", err, string(output))
+	}
+
+	cmd = exec.Command("sudo", "chmod", "-R", "0777", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: failed to set pool permissions: %v, output: %s\n", err, string(output))
 	}
 
 	// Add to fstab for persistence
-	fstabEntry := fmt.Sprintf("%s %s none bind 0 0\n", req.Devices[0], mountPoint)
-	cmd = exec.Command("sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
-	cmd.Run()
+	fstabEntry := fmt.Sprintf("%s %s none bind 0 0\n", sourcePath, mountPoint)
+	cmd = exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
+	if err := cmd.Run(); err != nil {
+		// Log warning but don't fail - fstab update is secondary
+		fmt.Printf("Warning: failed to add to fstab: %v\n", err)
+	}
 
 	return nil
 }
@@ -282,9 +344,9 @@ func createLVMPool(req models.StoragePoolCreateRequest) error {
 	}
 
 	// Ensure data directory exists and has proper permissions
-	cmd := exec.Command("sudo", "mkdir", "-p", "/var/lib/arcanas")
+	cmd := exec.Command("sudo", "mkdir", "-p", "/srv")
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create data directory /var/lib/arcanas: %v, output: %s", err, string(output))
+		return fmt.Errorf("failed to create data directory /srv: %v, output: %s", err, string(output))
 	}
 
 	// Create volume group
@@ -314,75 +376,148 @@ func createLVMPool(req models.StoragePoolCreateRequest) error {
 	}
 
 	// Create mount point using sudo
-	mountPoint := "/var/lib/arcanas/" + req.Name
+	mountPoint := "/srv/" + req.Name
 	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create mount point: %v", err)
 	}
 
 	// Mount the logical volume
-	cmd = exec.Command("mount", lvPath, mountPoint)
+	cmd = exec.Command("sudo", "mount", lvPath, mountPoint)
 	if err := cmd.Run(); err != nil {
-		exec.Command("rmdir", mountPoint).Run()
+		exec.Command("sudo", "rmdir", mountPoint).Run()
 		return fmt.Errorf("failed to mount logical volume: %v", err)
+	}
+
+	// Set permissions for the mounted pool so Samba and other services can access it
+	// Set ownership to allow Samba to write (nogroup is the default guest account)
+	cmd = exec.Command("sudo", "chown", "-R", "nobody:nogroup", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Log warning but don't fail - this might not be critical
+		fmt.Printf("Warning: failed to set pool ownership: %v, output: %s\n", err, string(output))
+	}
+
+	// Set permissions to allow read/write access
+	cmd = exec.Command("sudo", "chmod", "-R", "0777", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Log warning but don't fail
+		fmt.Printf("Warning: failed to set pool permissions: %v, output: %s\n", err, string(output))
 	}
 
 	// Add to fstab for persistence
 	fstabEntry := fmt.Sprintf("%s %s ext4 defaults 0 0\n", lvPath, mountPoint)
-	cmd = exec.Command("sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
-	cmd.Run()
+	cmd = exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
+	if err := cmd.Run(); err != nil {
+		// Log warning but don't fail - fstab update is secondary
+		fmt.Printf("Warning: failed to add to fstab: %v\n", err)
+	}
 
 	return nil
 }
 
 func UpdateStoragePool(name string, req models.StoragePoolCreateRequest) error {
 	// For mergerfs, we need to remount with new config
-	mountPoint := "/mnt/" + name
+	mountPoint := "/srv/" + name
 
 	// Unmount first
-	cmd := exec.Command("umount", mountPoint)
-	cmd.Run()
+	cmd := exec.Command("sudo", "umount", mountPoint)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to unmount pool: %v", err)
+	}
 
 	// Remount with new config
 	devicesStr := strings.Join(req.Devices, ":")
 	config := req.Config
 	if config == "" {
-		config = "defaults"
+		config = "defaults,allow_other,use_ino"
 	}
 
-	cmd = exec.Command("mergerfs", devicesStr, mountPoint, "-o", config)
-	return cmd.Run()
+	cmd = exec.Command("sudo", "mergerfs", devicesStr, mountPoint, "-o", config)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to remount mergerfs pool: %v", err)
+	}
+
+	// Update fstab entry
+	// First remove old entry
+	cmd = exec.Command("sudo", "sed", "-i", fmt.Sprintf("\\|%s|d", mountPoint), "/etc/fstab")
+	cmd.Run()
+
+	// Add new entry
+	fstabEntry := fmt.Sprintf("%s %s fuse.mergerfs %s 0 0\n", devicesStr, mountPoint, config)
+	cmd = exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to update fstab: %v", err)
+	}
+
+	return nil
 }
 
 func DeleteStoragePool(name string) error {
-	poolPath := "/var/lib/arcanas/" + name
-	mountPoint := "/mnt/" + name
+	mountPoint := "/srv/" + name
 
 	// Check if it's currently mounted and unmount if needed
 	if isMounted(mountPoint) {
-		cmd := exec.Command("umount", mountPoint)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to unmount: %v", err)
+		cmd := exec.Command("sudo", "umount", mountPoint)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to unmount %s: %v, output: %s", mountPoint, err, string(output))
 		}
+		fmt.Printf("Successfully unmounted %s\n", mountPoint)
 	}
 
 	// Remove from fstab if exists
-	cmd := exec.Command("sed", "-i", fmt.Sprintf("\\|%s|d", mountPoint), "/etc/fstab")
-	cmd.Run()
+	cmd := exec.Command("sudo", "sed", "-i", fmt.Sprintf("\\|%s|d", mountPoint), "/etc/fstab")
+	if err := cmd.Run(); err != nil {
+		// Log warning but don't fail - fstab entry might not exist
+		fmt.Printf("Warning: failed to remove from fstab: %v\n", err)
+	}
 
-	// Remove mount point if exists
-	cmd = exec.Command("rmdir", mountPoint)
-	cmd.Run()
+	// Remove the pool directory and all contents
+	cmd = exec.Command("sudo", "rm", "-rf", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to remove pool directory %s: %v, output: %s", mountPoint, err, string(output))
+	}
 
-	// Remove the pool directory
-	cmd = exec.Command("rm", "-rf", poolPath)
-	return cmd.Run()
+	fmt.Printf("Successfully deleted pool %s\n", name)
+	return nil
 }
 
 func isMounted(mountPoint string) bool {
 	cmd := exec.Command("findmnt", "-n", mountPoint)
 	err := cmd.Run()
 	return err == nil
+}
+
+// CleanupLegacyPool removes a pool from the old /var/lib/arcanas/ location
+// This is useful for migrating pools to the new /srv/ location
+// TODO: Remove this function after migration period (v1.0.0 or later)
+// DEPRECATED: This is temporary migration helper code
+func CleanupLegacyPool(poolName string) error {
+	legacyMountPoint := "/var/lib/arcanas/" + poolName
+
+	// Check if it's mounted
+	if isMounted(legacyMountPoint) {
+		cmd := exec.Command("sudo", "umount", legacyMountPoint)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to unmount legacy pool: %v, output: %s", err, string(output))
+		}
+	}
+
+	// Remove from fstab if exists
+	cmd := exec.Command("sudo", "sed", "-i", fmt.Sprintf("\\|%s|d", legacyMountPoint), "/etc/fstab")
+	if err := cmd.Run(); err != nil {
+		// Log warning but don't fail
+		fmt.Printf("Warning: failed to remove legacy pool from fstab: %v\n", err)
+	}
+
+	// Remove the directory if it exists
+	if _, err := os.Stat(legacyMountPoint); err == nil {
+		cmd = exec.Command("sudo", "rm", "-rf", legacyMountPoint)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to remove legacy pool directory: %v, output: %s", err, string(output))
+		}
+	}
+
+	return nil
 }
 
 func FormatDisk(req models.DiskFormatRequest) error {
