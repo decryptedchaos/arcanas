@@ -26,28 +26,83 @@ type MountInfo struct {
 }
 
 func getMountInfo(device string) *MountInfo {
-	// Use df to get mountpoint and filesystem info
-	cmd := exec.Command("df", "--output=source,target,fstype")
+	// Use lsblk to get mountpoint and filesystem info - more reliable than df
+	// lsblk -J -o NAME,MOUNTPOINT,FSTYPE,PATH
+	cmd := exec.Command("lsblk", "-J", "-o", "NAME,MOUNTPOINT,FSTYPE,PATH")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil
 	}
 
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines[1:] { // Skip header
-		fields := strings.Fields(line)
-		if len(fields) >= 3 {
-			source := fields[0]
-			target := fields[1]
-			fstype := fields[2]
+	type LsblkDevice struct {
+		Name       string        `json:"name"`
+		Path       string        `json:"path"`
+		Mountpoint *string       `json:"mountpoint"`
+		Fstype     *string       `json:"fstype"`
+		Children   []LsblkDevice `json:"children"`
+	}
+	type LsblkOutput struct {
+		Blockdevices []LsblkDevice `json:"blockdevices"`
+	}
 
-			// Check if this matches our device (or contains device name)
-			if strings.Contains(source, strings.TrimPrefix(device, "/dev/")) || source == device {
+	var result LsblkOutput
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil
+	}
+
+	// Search for matching device and filesystem info
+	var searchDevice func(d LsblkDevice) *MountInfo
+	searchDevice = func(d LsblkDevice) *MountInfo {
+		// Check if this is our device
+		if d.Path == device || strings.Contains(d.Path, strings.TrimPrefix(device, "/dev/")) {
+			// If this device has mountpoint/fstype, return it
+			if d.Fstype != nil || d.Mountpoint != nil {
+				fstype := "unknown"
+				mountpoint := ""
+				if d.Fstype != nil {
+					fstype = *d.Fstype
+				}
+				if d.Mountpoint != nil {
+					mountpoint = *d.Mountpoint
+				}
 				return &MountInfo{
-					Mountpoint: target,
+					Mountpoint: mountpoint,
 					Filesystem: fstype,
 				}
 			}
+		}
+
+		// Search children (partitions)
+		for _, child := range d.Children {
+			// For partitions, check if they belong to our device
+			if strings.HasPrefix(child.Path, strings.TrimPrefix(device, "/dev/")) ||
+				strings.HasPrefix(child.Path, device) {
+				fstype := "unknown"
+				mountpoint := ""
+				if child.Fstype != nil {
+					fstype = *child.Fstype
+				}
+				if child.Mountpoint != nil {
+					mountpoint = *child.Mountpoint
+				}
+				if fstype != "unknown" || mountpoint != "" {
+					return &MountInfo{
+						Mountpoint: mountpoint,
+						Filesystem: fstype,
+					}
+				}
+			}
+			if result := searchDevice(child); result != nil {
+				return result
+			}
+		}
+
+		return nil
+	}
+
+	for _, blockdev := range result.Blockdevices {
+		if result := searchDevice(blockdev); result != nil {
+			return result
 		}
 	}
 

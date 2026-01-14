@@ -24,7 +24,6 @@ func GetStoragePools() ([]models.StoragePool, error) {
 	pools := make([]models.StoragePool, 0)
 
 	// Get mergerfs mounts (JBOD pools)
-	// Get mergerfs mounts (JBOD pools)
 	cmd := exec.Command("findmnt", "-t", "fuse.mergerfs", "-J")
 	output, err := cmd.Output()
 	if err == nil {
@@ -53,19 +52,45 @@ func GetStoragePools() ([]models.StoragePool, error) {
 						CreatedAt:  time.Now(),
 					}
 
-					// Parse devices from 'source' string (src1:src2) or 'sources' array
-					if src, ok := mount["source"].(string); ok {
-						pool.Devices = strings.Split(src, ":")
-					} else if sources, ok := mount["sources"].([]interface{}); ok {
-						for _, source := range sources {
-							if s, ok := source.(string); ok {
-								pool.Devices = append(pool.Devices, s)
+					// Parse devices from mergerfs config
+					// findmnt may show truncated source (e.g., "b:c"), so read from fstab
+					// to get the actual source mount points
+					fstabData, err := os.ReadFile("/etc/fstab")
+					if err == nil {
+						fstabLines := strings.Split(string(fstabData), "\n")
+						for _, line := range fstabLines {
+							if strings.Contains(line, target) && strings.Contains(line, "fuse.mergerfs") {
+								// Parse: /mnt/arcanas-disk-sdb:/mnt/arcanas-disk-sdc /srv/vt fuse.mergerfs ...
+								fields := strings.Fields(line)
+								if len(fields) >= 1 {
+									// First field is the source string
+									source := fields[0]
+									if source != "" && source != "none" {
+										// Split by colon to get individual mount points
+										pool.Devices = strings.Split(source, ":")
+										break
+									}
+								}
+							}
+						}
+					}
+
+					// Fallback: if fstab parsing failed, use findmnt output (may be truncated)
+					if len(pool.Devices) == 0 {
+						if src, ok := mount["source"].(string); ok && src != "" {
+							pool.Devices = strings.Split(src, ":")
+						} else if sources, ok := mount["sources"].([]interface{}); ok {
+							for _, source := range sources {
+								if s, ok := source.(string); ok {
+									pool.Devices = append(pool.Devices, s)
+								}
 							}
 						}
 					}
 
 					// Get size and usage
 					pool.Size, pool.Used = GetPathUsage(pool.MountPoint)
+					pool.Available = pool.Size - pool.Used
 
 					pools = append(pools, pool)
 				}
@@ -87,6 +112,7 @@ func GetStoragePools() ([]models.StoragePool, error) {
 			if poolName == "ftp" || poolName == "http" {
 				continue
 			}
+
 			poolPath := filepath.Join(arcanasDir, poolName)
 
 			// Skip if already detected as mounted pool
@@ -113,6 +139,7 @@ func GetStoragePools() ([]models.StoragePool, error) {
 			// Try to get size and usage if path exists
 			if _, err := os.Stat(poolPath); err == nil {
 				pool.Size, pool.Used = GetPathUsage(poolPath)
+				pool.Available = pool.Size - pool.Used
 			}
 
 			pools = append(pools, pool)
@@ -214,21 +241,24 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 	// Add pool to fstab for persistence
 	fstabEntry := fmt.Sprintf("%s %s fuse.mergerfs %s 0 0\n", devicesStr, mountPoint, config)
 	cmd = exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		// Log warning but don't fail - fstab update is secondary
+		fmt.Printf("Warning: failed to add to fstab: %v\n", err)
+	}
 
 	return nil
 }
 
 // prepareDiskForPool ensures a device is formatted and mounted, returning its mount point
 func prepareDiskForPool(device string) (string, error) {
-	// 1. Check if already mounted
+	//1. Check if already mounted
 	cmd := exec.Command("findmnt", "-n", "-o", "TARGET", "--source", device)
 	output, err := cmd.Output()
 	if err == nil && len(output) > 0 {
 		return strings.TrimSpace(string(output)), nil
 	}
 
-	// 2. Check if device has a filesystem already
+	//2. Check if device has a filesystem already
 	cmd = exec.Command("blkid", "-o", "value", "-s", "TYPE", device)
 	fsOutput, err := cmd.Output()
 	hasFilesystem := err == nil && len(strings.TrimSpace(string(fsOutput))) > 0
@@ -245,7 +275,7 @@ func prepareDiskForPool(device string) (string, error) {
 		}
 	}
 
-	// 3. Create persistent mount point
+	//3. Create persistent mount point
 	// Naming: /mnt/arcanas-disk-{devname} (e.g. sdb)
 	devName := strings.TrimPrefix(device, "/dev/")
 	mountPath := "/mnt/arcanas-disk-" + devName
@@ -254,14 +284,15 @@ func prepareDiskForPool(device string) (string, error) {
 		return "", fmt.Errorf("failed to make dir %s: %v", mountPath, err)
 	}
 
-	// 4. Mount it
+	//4. Mount it
 	if out, err := exec.Command("sudo", "mount", device, mountPath).CombinedOutput(); err != nil {
 		return "", fmt.Errorf("mount failed: %v %s", err, string(out))
 	}
 
-	// 5. Add to fstab (for disk persistence)
+	//5. Add to fstab (for disk persistence)
 	// Check if entry already exists to avoid duplicates
 	cmd = exec.Command("grep", "-q", mountPath, "/etc/fstab")
+	err = cmd.Run()
 	if err != nil {
 		// Not found in fstab, add it
 		// UUID is safer, but device path used for simplicity
@@ -277,7 +308,7 @@ func createBindMountPool(req models.StoragePoolCreateRequest) error {
 		return fmt.Errorf("bind mount pools require exactly one device")
 	}
 
-	// Verify the source path exists
+	// Verify source path exists
 	sourcePath := req.Devices[0]
 	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
 		return fmt.Errorf("source path %s does not exist", sourcePath)
@@ -440,7 +471,10 @@ func UpdateStoragePool(name string, req models.StoragePoolCreateRequest) error {
 	// Update fstab entry
 	// First remove old entry
 	cmd = exec.Command("sudo", "sed", "-i", fmt.Sprintf("\\|%s|d", mountPoint), "/etc/fstab")
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		// Log warning but don't fail - entry might not exist
+		fmt.Printf("Warning: failed to remove from fstab: %v\n", err)
+	}
 
 	// Add new entry
 	fstabEntry := fmt.Sprintf("%s %s fuse.mergerfs %s 0 0\n", devicesStr, mountPoint, config)
@@ -455,11 +489,29 @@ func UpdateStoragePool(name string, req models.StoragePoolCreateRequest) error {
 func DeleteStoragePool(name string) error {
 	mountPoint := "/srv/" + name
 
+	// Check if samba is running and stop it temporarily
+	sambaRunning := false
+	if cmd := exec.Command("sudo", "systemctl", "is-active", "smbd").Run(); cmd == nil {
+		sambaRunning = true
+		fmt.Printf("Stopping Samba for pool deletion...\n")
+		if output, err := exec.Command("sudo", "systemctl", "stop", "smbd").CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to stop Samba: %v, output: %s", err, string(output))
+		}
+	}
+
 	// Check if it's currently mounted and unmount if needed
 	if isMounted(mountPoint) {
+		// Try normal unmount first
 		cmd := exec.Command("sudo", "umount", mountPoint)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to unmount %s: %v, output: %s", mountPoint, err, string(output))
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			// If normal unmount fails, try lazy unmount
+			fmt.Printf("Normal unmount failed, trying lazy unmount...\n")
+			cmd = exec.Command("sudo", "umount", "-l", mountPoint)
+			output, err = cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to unmount %s: %v, output: %s", mountPoint, err, string(output))
+			}
 		}
 		fmt.Printf("Successfully unmounted %s\n", mountPoint)
 	}
@@ -471,10 +523,18 @@ func DeleteStoragePool(name string) error {
 		fmt.Printf("Warning: failed to remove from fstab: %v\n", err)
 	}
 
-	// Remove the pool directory and all contents
+	// Remove pool directory and all contents
 	cmd = exec.Command("sudo", "rm", "-rf", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to remove pool directory %s: %v, output: %s", mountPoint, err, string(output))
+	}
+
+	// Restart Samba if it was running
+	if sambaRunning {
+		fmt.Printf("Restarting Samba...\n")
+		if output, err := exec.Command("sudo", "systemctl", "start", "smbd").CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to restart Samba: %v, output: %s", err, string(output))
+		}
 	}
 
 	fmt.Printf("Successfully deleted pool %s\n", name)
@@ -498,7 +558,7 @@ func CleanupLegacyPool(poolName string) error {
 	if isMounted(legacyMountPoint) {
 		cmd := exec.Command("sudo", "umount", legacyMountPoint)
 		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to unmount legacy pool: %v, output: %s", err, string(output))
+			return fmt.Errorf("failed to unmount legacy pool: %v, output: %s", legacyMountPoint, err, string(output))
 		}
 	}
 
@@ -509,11 +569,11 @@ func CleanupLegacyPool(poolName string) error {
 		fmt.Printf("Warning: failed to remove legacy pool from fstab: %v\n", err)
 	}
 
-	// Remove the directory if it exists
+	// Remove the pool directory if it exists
 	if _, err := os.Stat(legacyMountPoint); err == nil {
 		cmd = exec.Command("sudo", "rm", "-rf", legacyMountPoint)
 		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to remove legacy pool directory: %v, output: %s", err, string(output))
+			return fmt.Errorf("failed to remove legacy pool directory: %v, output: %s", legacyMountPoint, err, string(output))
 		}
 	}
 
@@ -545,41 +605,44 @@ func FormatDisk(req models.DiskFormatRequest) error {
 }
 
 func GetPathUsage(mountPoint string) (int64, int64) {
-	// First try using df for mounted filesystems
+	var used int64
+
+	// Try to get used space using du -s -b
+	// This works reliably for both regular and FUSE filesystems
+	duCmd := exec.Command("du", "-s", "-b", mountPoint)
+	duOutput, err := duCmd.Output()
+	if err == nil {
+		lines := strings.Split(string(duOutput), "\n")
+		if len(lines) > 0 {
+			fields := strings.Fields(lines[0])
+			if len(fields) > 0 {
+				used, _ = strconv.ParseInt(fields[0], 10, 64)
+			}
+		}
+	}
+
+	// Try df first for total size (works for regular filesystems)
 	cmd := exec.Command("df", "-B", "1", "--output=size,used", mountPoint)
 	output, err := cmd.Output()
 	if err == nil {
 		lines := strings.Split(string(output), "\n")
 		if len(lines) >= 2 {
 			fields := strings.Fields(lines[1])
-			if len(fields) >= 2 {
+			if len(fields) >= 1 {
 				size, _ := strconv.ParseInt(fields[0], 10, 64)
-				used, _ := strconv.ParseInt(fields[1], 10, 64)
-				return size, used
+				duUsed, _ := strconv.ParseInt(fields[1], 10, 64)
+				if size > 0 {
+					if duUsed > used {
+						used = duUsed
+					}
+					return size, used
+				}
 			}
 		}
 	}
 
-	// If df fails, try using du for directory sizes
-	cmd = exec.Command("du", "-sb", mountPoint)
-	output, err = cmd.Output()
-	if err != nil {
-		return 0, 0
-	}
-
-	lines := strings.Split(string(output), "\n")
-	if len(lines) == 0 {
-		return 0, 0
-	}
-
-	fields := strings.Fields(lines[0])
-	if len(fields) < 1 {
-		return 0, 0
-	}
-
-	used, _ := strconv.ParseInt(fields[0], 10, 64)
-	// For directories, we don't have a total size, so estimate based on used space
-	size := used + (used / 10) // Add 10% overhead estimate
-
-	return size, used
+	// For FUSE filesystems where df returns 0 or unreliable values,
+	// we can't reliably get total capacity. Return used for both
+	// or 0, used if we couldn't get any values
+	return used, used
 }

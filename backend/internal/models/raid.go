@@ -35,6 +35,7 @@ type StoragePool struct {
 	Devices    []string  `json:"devices"`     // list of device paths
 	Size       int64     `json:"size"`        // total size in bytes
 	Used       int64     `json:"used"`        // used space in bytes
+	Available  int64     `json:"available"`   // available space in bytes
 	State      string    `json:"state"`       // active, inactive, error
 	MountPoint string    `json:"mount_point"` // where it's mounted
 	Config     string    `json:"config"`      // mergerfs config options
