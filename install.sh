@@ -153,15 +153,47 @@ setup_storage_sudoers() {
     mkdir -p /etc/sudoers.d
     
     # Remove old sudoers files to prevent conflicts
-    rm -f /etc/sudoers.d/arcanas-storage /etc/sudoers.d/arcanas-users /etc/sudoers.d/arcanas-samba
+    rm -f /etc/sudoers.d/arcanas-storage /etc/sudoers.d/arcanas-users /etc/sudoers.d/arcanas-samba /etc/sudoers.d/arcanas
     
-    # Copy shared sudoers configuration
-    cp "$(dirname "$0")/sudoers.conf" /etc/sudoers.d/arcanas
+    # Write sudoers configuration inline (no external file needed)
+    cat > /etc/sudoers.d/arcanas << 'EOF'
+# Arcanas operations sudoers configuration
+# Allows arcanas user and sudo group to run specific commands without password
+
+Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /usr/bin/mkdir, /bin/mount, /usr/bin/mount, /bin/umount, /usr/bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /sbin/mkfs*, /usr/sbin/mkfs*, /usr/bin/mergerfs, /bin/sh, /usr/bin/sh, /usr/bin/sed, /bin/sed, /bin/rmdir, /usr/bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/bin/chown, /bin/chown, /usr/sbin/mdadm, /usr/bin/mdadm, /usr/bin/true, /usr/bin/tee, /bin/cat, /usr/bin/cat, /bin/chmod, /usr/bin/chmod, /bin/rm, /usr/bin/rm, /bin/systemctl, /usr/sbin/systemctl
+
+Cmnd_Alias ARCANAS_USERS = /usr/sbin/usermod, /usr/sbin/useradd, /usr/sbin/userdel, /usr/sbin/chpasswd, /bin/sh, /usr/bin/sh
+
+Cmnd_Alias ARCANAS_SERVICES = /usr/bin/pdbedit, /usr/sbin/smbpasswd, /usr/sbin/exportfs
+
+Cmnd_Alias ARCANAS_SAMBA = /usr/bin/tee, /usr/bin/smbcontrol, /usr/sbin/smbcontrol, /usr/bin/testparm, /usr/sbin/testparm
+
+arcanas ALL=(ALL) NOPASSWD: ARCANAS_STORAGE, ARCANAS_USERS, ARCANAS_SERVICES, ARCANAS_SAMBA
+%sudo ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
+EOF
     
     # Set proper permissions
     chmod 440 /etc/sudoers.d/arcanas
+    chown root:root /etc/sudoers.d/arcanas
     
     print_success "Sudoers configuration completed"
+}
+
+# Function to setup storage directories
+setup_storage_directories() {
+    print_status "Setting up storage directories..."
+    
+    # Ensure /srv directory exists for storage pools
+    if [ ! -d "/srv" ]; then
+        mkdir -p /srv
+        print_status "Created /srv directory"
+    fi
+    
+    # Set ownership to arcanas user for pool creation
+    chown root:root /srv
+    chmod 755 /srv
+    
+    print_success "Storage directories configured"
 }
 
 # Function to download release
@@ -263,6 +295,24 @@ create_service_user() {
 install_files() {
     print_status "Installing Arcanas files..."
     
+    # Extract archive first
+    cd /tmp
+    if ! tar -xzf arcanas.tar.gz; then
+        print_error "Failed to extract release archive"
+        exit 1
+    fi
+    
+    # Verify extraction was successful
+    if [ ! -d "arcanas" ]; then
+        print_error "Extraction failed - arcanas directory not found"
+        exit 1
+    fi
+    
+    if [ ! -f "arcanas/arcanas" ]; then
+        print_error "Binary not found in extracted archive"
+        exit 1
+    fi
+    
     # Check if this is an update
     if [ -f "$INSTALL_DIR/arcanas" ]; then
         print_status "Arcanas already installed, performing update..."
@@ -276,10 +326,6 @@ install_files() {
         # Backup existing binary
         cp "$INSTALL_DIR/arcanas" "$INSTALL_DIR/arcanas.backup"
         print_status "Backed up existing binary"
-        
-        # Extract new archive
-        cd /tmp
-        tar -xzf arcanas.tar.gz
         
         # Replace only the binary
         cp arcanas/arcanas "$INSTALL_DIR/arcanas"
@@ -295,6 +341,11 @@ install_files() {
         chown $SERVICE_USER:$SERVICE_USER "$INSTALL_DIR/arcanas"
         chmod +x "$INSTALL_DIR/arcanas"
         
+        # Set ownership on static directory if it exists
+        if [ -d "$INSTALL_DIR/static" ]; then
+            chown -R $SERVICE_USER:$SERVICE_USER "$INSTALL_DIR/static"
+        fi
+        
         # Always update systemd service to apply any changes
         print_status "Updating systemd service..."
         create_systemd_service
@@ -309,10 +360,6 @@ install_files() {
         
         # Create installation directory
         mkdir -p $INSTALL_DIR
-        
-        # Extract archive
-        cd /tmp
-        tar -xzf arcanas.tar.gz
         
         # Copy files to installation directory
         cp -r arcanas/* $INSTALL_DIR/
@@ -347,11 +394,12 @@ Restart=always
 RestartSec=5
 Environment=API_PORT=4000
 
-# Security settings
-PrivateTmp=false
-ProtectSystem=false
-ProtectHome=true
-ReadWritePaths=$INSTALL_DIR $DATA_DIR /run/sudo /tmp
+# Security settings - allow only necessary paths
+ReadWritePaths=$INSTALL_DIR $DATA_DIR /srv /run/sudo /tmp
+ReadWritePaths=/etc/sudoers.d
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -369,9 +417,14 @@ setup_firewall() {
     
     if command -v ufw &> /dev/null; then
         ufw allow 4000/tcp
+        ufw allow 139/tcp
+        ufw allow 445/tcp
+        ufw allow 2049/tcp
         print_status "Firewall configured (ufw)"
     elif command -v firewall-cmd &> /dev/null; then
         firewall-cmd --permanent --add-port=4000/tcp
+        firewall-cmd --permanent --add-service=samba
+        firewall-cmd --permanent --add-service=nfs
         firewall-cmd --reload
         print_status "Firewall configured (firewalld)"
     else
@@ -436,6 +489,7 @@ main() {
     detect_os
     install_dependencies
     setup_storage_sudoers
+    setup_storage_directories
     download_release
     create_service_user
     install_files
