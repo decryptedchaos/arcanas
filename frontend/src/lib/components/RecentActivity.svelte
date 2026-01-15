@@ -80,7 +80,7 @@
   
   <div class="space-y-3">
     {#each activities as activity}
-      <div class="flex items-start space-x-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+      <div class="flex items-start space-x-3 p-3 rounded-lg border border-gray-100 dark:border-border hover:bg-gray-50 dark:hover:bg-muted transition-colors">
         <div class="flex-shrink-0 p-2 {getTypeClasses(activity.type)} rounded-lg border">
           {@html getIcon(activity.icon)}
         </div>

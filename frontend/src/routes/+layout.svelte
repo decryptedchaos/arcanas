@@ -85,7 +85,7 @@
   />
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex {darkModeClass}">
+<div class="min-h-screen bg-gray-50 dark:bg-surface flex {darkModeClass}">
   <!-- Sidebar -->
   <Sidebar bind:sidebarOpen />
 
@@ -93,14 +93,14 @@
   <div class="flex-1 flex flex-col overflow-hidden">
     <!-- Top Navigation -->
     <header
-      class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 z-10"
+      class="bg-white dark:bg-card shadow-sm border-b border-gray-200 dark:border-gray-700 z-10"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
           <div class="flex items-center">
             <button
               on:click={() => (sidebarOpen = !sidebarOpen)}
-              class="md:hidden p-2 rounded-md text-gray-400 dark:text-gray-300 hover:text-gray-500 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+              class="md:hidden p-2 rounded-md text-gray-400 dark:text-gray-300 hover:text-gray-500 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-muted"
               aria-label="Toggle sidebar"
             >
               <svg
@@ -128,7 +128,7 @@
             <!-- Dark Mode Toggle -->
             <button
               on:click={toggleDarkMode}
-              class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              class="p-2 rounded-lg bg-gray-100 dark:bg-muted hover:bg-gray-200 dark:hover:bg-border transition-colors"
               title="Toggle dark mode"
             >
               {#if darkMode}
@@ -167,7 +167,7 @@
 
             <div class="relative">
               <button
-                class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-muted"
                 aria-label="Notifications"
               >
                 <svg

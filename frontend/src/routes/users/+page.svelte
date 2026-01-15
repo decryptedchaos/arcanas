@@ -58,13 +58,13 @@
         const colors = {
             samba: enabled
                 ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+                : "bg-gray-100 text-gray-600 dark:bg-muted dark:text-gray-300",
             nfs: enabled
                 ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+                : "bg-gray-100 text-gray-600 dark:bg-muted dark:text-gray-300",
             ssh: enabled
                 ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+                : "bg-gray-100 text-gray-600 dark:bg-muted dark:text-gray-300",
         };
         return colors[service] || colors.samba;
     }
@@ -246,7 +246,7 @@
         </div>
     {:else}
         <!-- Service Filter Tabs -->
-        <div class="mb-6 border-b border-gray-200 dark:border-gray-700">
+        <div class="mb-6 border-b border-gray-200 dark:border-border">
             <nav class="-mb-px flex space-x-8">
                 <button
                     class="py-2 px-1 border-b-2 font-medium text-sm transition-colors"
@@ -258,7 +258,7 @@
                     class:hover:text-gray-700={selectedService !== "all"}
                     class:dark:hover:text-gray-300={selectedService !== "all"}
                     class:hover:border-gray-300={selectedService !== "all"}
-                    class:dark:hover:border-gray-600={selectedService !== "all"}
+                    class:dark:hover:border-border={selectedService !== "all"}
                     on:click={() => (selectedService = "all")}
                 >
                     All Users ({getServiceCount("all")})
@@ -304,17 +304,17 @@
 
         <!-- Users Table -->
         <div
-            class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md"
+            class="bg-white dark:bg-card shadow overflow-hidden sm:rounded-md"
         >
             <ul class="divide-y divide-gray-200 dark:divide-gray-700">
                 {#each filteredUsers() as user (user.username)}
-                    <li class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <li class="hover:bg-gray-50 dark:hover:bg-muted">
                         <div class="px-4 py-4 sm:px-6">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center">
                                     <div class="flex-shrink-0">
                                         <div
-                                            class="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center"
+                                            class="h-10 w-10 rounded-full bg-gray-300 dark:bg-border flex items-center justify-center"
                                         >
                                             <span
                                                 class="text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -340,7 +340,7 @@
                                         <div class="mt-1 flex flex-wrap gap-1">
                                             {#each user.groups as group}
                                                 <span
-                                                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-muted dark:text-gray-200"
                                                 >
                                                     {group}
                                                 </span>
@@ -458,10 +458,10 @@
                 tabindex="-1"
             ></div>
             <div
-                class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:w-full sm:max-w-lg"
+                class="relative bg-white dark:bg-card rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:w-full sm:max-w-lg"
             >
                 <div
-                    class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4"
+                    class="bg-white dark:bg-card px-4 pt-5 pb-4 sm:p-6 sm:pb-4"
                 >
                     <div class="flex items-center justify-between mb-4">
                         <h3
@@ -503,7 +503,7 @@
                                     type="text"
                                     bind:value={newUser.username}
                                     required
-                                    class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    class="mt-1 block w-full border-gray-300 dark:border dark:bg-muted dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                             <div>
@@ -517,7 +517,7 @@
                                     type="text"
                                     bind:value={newUser.name}
                                     required
-                                    class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    class="mt-1 block w-full border-gray-300 dark:border dark:bg-muted dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                             <div>
@@ -531,7 +531,7 @@
                                     type="password"
                                     bind:value={newUser.password}
                                     required
-                                    class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    class="mt-1 block w-full border-gray-300 dark:border dark:bg-muted dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                             <div>
@@ -544,7 +544,7 @@
                                     id="groups"
                                     type="text"
                                     bind:value={newUser.groups}
-                                    class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    class="mt-1 block w-full border-gray-300 dark:border dark:bg-muted dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
                         </div>
@@ -552,7 +552,7 @@
                             <button
                                 type="button"
                                 on:click={() => (showCreateModal = false)}
-                                class="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+                                class="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border shadow-sm px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-muted hover:bg-gray-50 dark:hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
                             >
                                 Cancel
                             </button>
@@ -585,10 +585,10 @@
                 tabindex="-1"
             ></div>
             <div
-                class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:w-full sm:max-w-lg"
+                class="relative bg-white dark:bg-card rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:w-full sm:max-w-lg"
             >
                 <div
-                    class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4"
+                    class="bg-white dark:bg-card px-4 pt-5 pb-4 sm:p-6 sm:pb-4"
                 >
                     <div class="flex items-center justify-between mb-4">
                         <h3
@@ -629,7 +629,7 @@
                                 type="text"
                                 bind:value={selectedUser.name}
                                 required
-                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                class="mt-1 block w-full border-gray-300 dark:border dark:bg-muted dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
                         <div>
@@ -642,7 +642,7 @@
                                 id="edit-groups"
                                 type="text"
                                 bind:value={selectedUser.groups}
-                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                class="mt-1 block w-full border-gray-300 dark:border dark:bg-muted dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
                         <div>
@@ -656,7 +656,7 @@
                                 type="password"
                                 bind:value={selectedUser.password}
                                 placeholder="Enter new password"
-                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                class="mt-1 block w-full border-gray-300 dark:border dark:bg-muted dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
                         <div>
@@ -670,7 +670,7 @@
                                 type="password"
                                 bind:value={selectedUser.passwordConfirm}
                                 placeholder="Confirm new password"
-                                class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                class="mt-1 block w-full border-gray-300 dark:border dark:bg-muted dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                             />
                         </div>
                     </div>
@@ -678,7 +678,7 @@
                         <button
                             type="button"
                             on:click={() => (showEditModal = false)}
-                            class="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+                            class="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border shadow-sm px-4 py-2 text-base font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-muted hover:bg-gray-50 dark:hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
                         >
                             Cancel
                         </button>
@@ -711,10 +711,10 @@
                 tabindex="-1"
             ></div>
             <div
-                class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:w-full sm:max-w-lg"
+                class="relative bg-white dark:bg-card rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:w-full sm:max-w-lg"
             >
                 <div
-                    class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4"
+                    class="bg-white dark:bg-card px-4 pt-5 pb-4 sm:p-6 sm:pb-4"
                 >
                     <div class="flex items-center justify-between mb-4">
                         <h3

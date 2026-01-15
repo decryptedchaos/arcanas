@@ -105,14 +105,14 @@
 
 <!-- Sidebar -->
 <div
-  class="fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-800 shadow-lg transform transition-all duration-300 ease-in-out md:translate-x-0 md:static md:inset-0 {sidebarOpen
+  class="fixed inset-y-0 left-0 z-50 bg-white dark:bg-card shadow-lg transform transition-all duration-300 ease-in-out md:translate-x-0 md:static md:inset-0 {sidebarOpen
     ? 'translate-x-0'
     : '-translate-x-full'} {isCollapsed ? 'w-16' : 'w-64'}"
 >
   <div class="flex flex-col h-full">
     <!-- Logo -->
     <div
-      class="flex items-center justify-between h-16 px-6 border-b border-gray-200 dark:border-gray-700"
+      class="flex items-center justify-between h-16 px-6 border-b border-gray-200 dark:border-border"
     >
       <div class="flex items-center">
         <div class="flex-shrink-0">
@@ -133,7 +133,7 @@
       </div>
       <button
         on:click={() => (isCollapsed = !isCollapsed)}
-        class="hidden md:block p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+        class="hidden md:block p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-muted"
         title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
@@ -177,7 +177,7 @@
                 )}
               class="w-full group flex items-center {isCollapsed
                 ? 'justify-center px-2'
-                : 'px-3'} py-2 text-sm font-medium rounded-md transition-colors duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                : 'px-3'} py-2 text-sm font-medium rounded-md transition-colors duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-muted hover:text-gray-900 dark:hover:text-white"
               title={isCollapsed ? item.name : ""}
             >
               <svg
@@ -213,7 +213,7 @@
                     class="group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200 {$page
                       .url.pathname === service.href
                       ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-r-2 border-primary-700 dark:border-primary-400'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200'}"
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-muted hover:text-gray-700 dark:hover:text-gray-200'}"
                   >
                     {@html getIcon(service.icon)}
                     <span class="ml-3">{service.name}</span>
@@ -231,7 +231,7 @@
               : 'px-3'} py-2 text-sm font-medium rounded-md transition-colors duration-200 {$page
               .url.pathname === item.href
               ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-r-2 border-primary-700 dark:border-primary-400'
-              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'}"
+              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-muted hover:text-gray-900 dark:hover:text-white'}"
             title={isCollapsed ? item.name : ""}
           >
             <div class="flex-shrink-0">

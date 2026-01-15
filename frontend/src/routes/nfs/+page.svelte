@@ -373,7 +373,7 @@
                   >
                 </div>
                 <div
-                  class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3"
+                  class="w-full bg-gray-200 dark:bg-muted rounded-full h-3"
                 >
                   <div
                     class="{getUsageColor(
@@ -397,7 +397,7 @@
                 <div class="space-y-2">
                   {#each export_item.clients as client}
                     <div
-                      class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                      class="flex items-center justify-between p-3 bg-gray-50 dark:bg-muted rounded-lg"
                     >
                       <div class="flex items-center space-x-3">
                         <span
@@ -415,7 +415,7 @@
                       <div class="flex flex-wrap gap-1">
                         {#each parseOptions(client.options) as option}
                           <span
-                            class="px-2 py-1 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded border border-gray-200 dark:border-gray-600"
+                            class="px-2 py-1 bg-white dark:bg-muted text-gray-600 dark:text-gray-300 text-xs rounded border border-gray-200 dark:border"
                           >
                             {option}
                           </span>
@@ -521,7 +521,7 @@
       ></div>
 
       <div
-        class="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6"
+        class="relative bg-white dark:bg-card rounded-lg max-w-2xl w-full p-6"
       >
         <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
           Create NFS Export
@@ -539,7 +539,7 @@
                 id="export-path"
                 type="text"
                 bind:value={newExport.path}
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 text-gray-900 dark:text-white"
+                class="w-full px-3 py-2 border border-gray-300 dark:border bg-white dark:bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 text-gray-900 dark:text-white"
                 placeholder="/data/share"
               />
             </div>
@@ -554,7 +554,7 @@
                 id="client-network"
                 type="text"
                 bind:value={newExport.clientNetwork}
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 text-gray-900 dark:text-white"
+                class="w-full px-3 py-2 border border-gray-300 dark:border bg-white dark:bg-card rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 text-gray-900 dark:text-white"
                 placeholder="192.168.1.0/24"
               />
             </div>
@@ -570,7 +570,7 @@
                 <label class="flex items-center">
                   <input
                     type="checkbox"
-                    class="mr-2 dark:bg-gray-700 dark:border-gray-600"
+                    class="mr-2 dark:bg-muted dark:border"
                     bind:checked={newExport.options.rw}
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300"
@@ -580,7 +580,7 @@
                 <label class="flex items-center">
                   <input
                     type="checkbox"
-                    class="mr-2 dark:bg-gray-700 dark:border-gray-600"
+                    class="mr-2 dark:bg-muted dark:border"
                     bind:checked={newExport.options.sync}
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300"
@@ -590,7 +590,7 @@
                 <label class="flex items-center">
                   <input
                     type="checkbox"
-                    class="mr-2 dark:bg-gray-700 dark:border-gray-600"
+                    class="mr-2 dark:bg-muted dark:border"
                     bind:checked={newExport.options.no_subtree_check}
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300"
@@ -600,7 +600,7 @@
                 <label class="flex items-center">
                   <input
                     type="checkbox"
-                    class="mr-2 dark:bg-gray-700 dark:border-gray-600"
+                    class="mr-2 dark:bg-muted dark:border"
                     bind:checked={newExport.options.no_root_squash}
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300"
@@ -610,7 +610,7 @@
                 <label class="flex items-center">
                   <input
                     type="checkbox"
-                    class="mr-2 dark:bg-gray-700 dark:border-gray-600"
+                    class="mr-2 dark:bg-muted dark:border"
                     bind:checked={newExport.options.async}
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300"
@@ -620,7 +620,7 @@
                 <label class="flex items-center">
                   <input
                     type="checkbox"
-                    class="mr-2 dark:bg-gray-700 dark:border-gray-600"
+                    class="mr-2 dark:bg-muted dark:border"
                     bind:checked={newExport.options.crossmnt}
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300"
@@ -631,12 +631,12 @@
             </fieldset>
           </div>
 
-          <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+          <div class="bg-gray-50 dark:bg-muted p-4 rounded-lg">
             <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">
               <strong>Preview export line:</strong>
             </p>
             <code
-              class="text-sm bg-gray-800 dark:bg-gray-900 text-gray-100 px-3 py-2 rounded block"
+              class="text-sm bg-gray-800 dark:bg-muted text-gray-100 px-3 py-2 rounded block"
             >
               {newExport.path}
               {newExport.clientNetwork}({#if newExport.options.rw}rw{:else}ro{/if}{#if newExport.options.sync},sync{/if}{#if newExport.options.no_subtree_check},no_subtree_check{/if}{#if newExport.options.no_root_squash},no_root_squash{/if}{#if newExport.options.async},async{/if}{#if newExport.options.crossmnt},crossmnt{/if})

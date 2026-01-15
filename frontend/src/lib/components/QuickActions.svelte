@@ -61,7 +61,7 @@
   {#each actions as action}
     <a 
       href={action.href}
-      class="flex items-center p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all duration-200 group"
+      class="flex items-center p-4 bg-white dark:bg-card rounded-lg border border-gray-200 dark:border-border hover:shadow-md transition-all duration-200 group"
     >
       <div class="flex-shrink-0 p-3 {getColorClasses(action.color)} rounded-lg group-hover:scale-105 transition-transform">
         {@html getIcon(action.icon)}

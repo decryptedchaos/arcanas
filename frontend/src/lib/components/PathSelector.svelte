@@ -35,7 +35,7 @@
 
     {#if loading}
         <div
-            class="animate-pulse h-10 bg-gray-200 dark:bg-gray-700 rounded-md"
+            class="animate-pulse h-10 bg-gray-200 dark:bg-muted rounded-md"
         ></div>
         <div class="text-xs text-red-500 mt-1">DEBUG: Loading pools...</div>
     {:else}

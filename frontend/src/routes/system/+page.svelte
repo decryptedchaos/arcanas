@@ -173,7 +173,7 @@
   <div class="flex items-center justify-between">
     <div>
       <h2
-        class="text-xl font-bold text-gray-900 dark:text-white dark:text-white"
+        class="text-xl font-bold text-gray-900 dark:text-white"
       >
         System Statistics
       </h2>
@@ -284,7 +284,7 @@
         <div class="space-y-4">
           <!-- CPU Usage Bar -->
           <div>
-            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+            <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-4">
               <div
                 class="bg-blue-600 h-4 rounded-full transition-all duration-500"
                 style="width: {formatPercent(systemStats?.cpu?.usage)}%"
@@ -294,7 +294,7 @@
 
           <!-- CPU Graph -->
           <div
-            class="h-32 bg-gray-50 dark:bg-gray-700 rounded-lg p-2 relative flex"
+            class="h-32 bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
           >
             <!-- Y-axis labels -->
             <div
@@ -401,7 +401,7 @@
         <div class="space-y-4">
           <!-- Memory Usage Bar -->
           <div>
-            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+            <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-4">
               <div
                 class="bg-green-600 h-4 rounded-full transition-all duration-500"
                 style="width: {formatPercent(systemStats?.memory?.usage)}%"
@@ -543,7 +543,7 @@
             </div>
           </div>
           <div
-            class="h-32 bg-gray-50 dark:bg-gray-700 rounded-lg p-2 relative flex"
+            class="h-32 bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
           >
             <!-- Y-axis labels -->
             <div
@@ -717,7 +717,7 @@
             </div>
           </div>
           <div
-            class="h-32 bg-gray-50 dark:bg-gray-700 rounded-lg p-2 relative flex"
+            class="h-32 bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
           >
             <!-- Y-axis labels -->
             <div
@@ -811,7 +811,7 @@
       </h3>
       <div class="space-y-4">
         {#each systemStats?.network?.interfaces || [] as iface}
-          <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+          <div class="p-4 bg-gray-50 dark:bg-muted rounded-lg">
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center space-x-3">
                 <h4 class="font-medium text-gray-900 dark:text-white">
@@ -887,7 +887,7 @@
           {/if}
 
           <!-- Disk Card -->
-          <div class="bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-gray-700 {disk?.type === 'raid' ? 'ring-2 ring-indigo-200 dark:ring-indigo-800' : ''}">
+          <div class="bg-white dark:bg-card shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-border {disk?.type === 'raid' ? 'ring-2 ring-indigo-200 dark:ring-indigo-800' : ''}">
             <!-- Header Section -->
             <div class="flex items-start justify-between mb-6">
               <div class="flex items-center space-x-4">
@@ -970,7 +970,7 @@
                   <span>Usage</span>
                   <span>{disk?.size && disk.size > 0 ? ((disk?.used || 0) / disk.size * 100).toFixed(1) : 0}%</span>
                 </div>
-                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-3">
                   <div class="{disk?.type === 'raid' ? 'bg-indigo-600' : 'bg-gradient-to-r from-emerald-500 to-green-500'} h-3 rounded-full transition-all duration-500"
                     style="width: {disk?.size && disk.size > 0 ? ((disk?.used || 0) / disk.size * 100) : 0}%"></div>
                 </div>

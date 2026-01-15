@@ -171,7 +171,7 @@
     </div>
     <div class="mt-4">
       <div
-        class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+        class="w-full bg-gray-200 dark:bg-muted rounded-full h-2 overflow-hidden"
       >
         <div
           class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 ease-out"
@@ -216,7 +216,7 @@
     </div>
     <div class="mt-4">
       <div
-        class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+        class="w-full bg-gray-200 dark:bg-muted rounded-full h-2 overflow-hidden"
       >
         <div
           class="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500 ease-out"
@@ -261,7 +261,7 @@
     </div>
     <div class="mt-4">
       <div
-        class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+        class="w-full bg-gray-200 dark:bg-muted rounded-full h-2 overflow-hidden"
       >
         <div
           class="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500 ease-out"
@@ -309,7 +309,7 @@
       </div>
       <div class="flex space-x-2">
         <div class="flex-1">
-          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-2">
             <div
               class="bg-orange-500 h-2 rounded-full transition-all duration-500"
               style="width: {Math.min(
@@ -323,7 +323,7 @@
           </div>
         </div>
         <div class="flex-1">
-          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-2">
             <div
               class="bg-orange-400 h-2 rounded-full transition-all duration-500"
               style="width: {Math.min(

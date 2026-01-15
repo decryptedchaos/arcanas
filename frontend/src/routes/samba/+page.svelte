@@ -257,7 +257,7 @@
     {:else}
         <div class="space-y-4">
             {#each shares as share}
-                <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+                <div class="bg-white dark:bg-card shadow rounded-lg p-6">
                     <div class="flex justify-between items-start">
                         <div>
                             <div class="flex items-center space-x-3 mb-3">
@@ -375,7 +375,7 @@
                 aria-label="Close modal"
             ></div>
             <div
-                class="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6"
+                class="relative bg-white dark:bg-card rounded-lg max-w-2xl w-full p-6"
             >
                 <h3
                     class="text-lg font-medium text-gray-900 dark:text-white mb-4"
@@ -387,12 +387,12 @@
                         type="text"
                         bind:value={newShare.name}
                         placeholder="Share Name"
-                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                        class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                         required
                     />
                     {#if poolsLoading}
                         <div
-                            class="w-full p-2 border rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300"
+                            class="w-full p-2 border rounded bg-gray-100 dark:bg-muted text-gray-500 dark:text-gray-300"
                         >
                             Loading storage pools...
                         </div>
@@ -406,7 +406,7 @@
                     {:else}
                         <select
                             bind:value={newShare.path}
-                            class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                            class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                             required
                         >
                             <option value="">Select a storage pool</option>
@@ -421,26 +421,26 @@
                         type="text"
                         bind:value={newShare.comment}
                         placeholder="Comment"
-                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                        class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                     />
                     <input
                         type="text"
                         bind:value={newShare.users}
                         placeholder="Users (comma separated)"
-                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                        class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                     />
                     <input
                         type="text"
                         bind:value={newShare.groups}
                         placeholder="Groups (comma separated)"
-                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                        class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                     />
                     <div class="space-y-2">
                         <label class="flex items-center space-x-2">
                             <input
                                 type="checkbox"
                                 bind:checked={newShare.guest_ok}
-                                class="rounded border-gray-300 dark:border-gray-600"
+                                class="rounded border-gray-300 dark:border"
                             />
                             <span class="text-sm text-gray-700 dark:text-gray-300"
                                 >Allow guest access</span
@@ -450,7 +450,7 @@
                             <input
                                 type="checkbox"
                                 bind:checked={newShare.read_only}
-                                class="rounded border-gray-300 dark:border-gray-600"
+                                class="rounded border-gray-300 dark:border"
                             />
                             <span class="text-sm text-gray-700 dark:text-gray-300"
                                 >Read only</span
@@ -460,7 +460,7 @@
                             <input
                                 type="checkbox"
                                 bind:checked={newShare.browseable}
-                                class="rounded border-gray-300 dark:border-gray-600"
+                                class="rounded border-gray-300 dark:border"
                             />
                             <span class="text-sm text-gray-700 dark:text-gray-300"
                                 >Browseable</span
@@ -503,7 +503,7 @@
                 aria-label="Close modal"
             ></div>
             <div
-                class="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6"
+                class="relative bg-white dark:bg-card rounded-lg max-w-2xl w-full p-6"
             >
                 <h3
                     class="text-lg font-medium text-gray-900 dark:text-white mb-4"
@@ -515,12 +515,12 @@
                         type="text"
                         bind:value={editShare.name}
                         placeholder="Share Name"
-                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                        class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                         required
                     />
                     {#if poolsLoading}
                         <div
-                            class="w-full p-2 border rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300"
+                            class="w-full p-2 border rounded bg-gray-100 dark:bg-muted text-gray-500 dark:text-gray-300"
                         >
                             Loading storage pools...
                         </div>
@@ -534,7 +534,7 @@
                     {:else}
                         <select
                             bind:value={editShare.path}
-                            class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                            class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                             required
                         >
                             <option value="">Select a storage pool</option>
@@ -549,26 +549,26 @@
                         type="text"
                         bind:value={editShare.comment}
                         placeholder="Comment"
-                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                        class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                     />
                     <input
                         type="text"
                         bind:value={editShare.users}
                         placeholder="Users (comma separated)"
-                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                        class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                     />
                     <input
                         type="text"
                         bind:value={editShare.groups}
                         placeholder="Groups (comma separated)"
-                        class="w-full p-2 border rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                        class="w-full p-2 border rounded bg-white dark:bg-muted text-gray-900 dark:text-white border-gray-300 dark:border"
                     />
                     <div class="space-y-2">
                         <label class="flex items-center space-x-2">
                             <input
                                 type="checkbox"
                                 bind:checked={editShare.guest_ok}
-                                class="rounded border-gray-300 dark:border-gray-600"
+                                class="rounded border-gray-300 dark:border"
                             />
                             <span class="text-sm text-gray-700 dark:text-gray-300"
                                 >Allow guest access</span
@@ -578,7 +578,7 @@
                             <input
                                 type="checkbox"
                                 bind:checked={editShare.read_only}
-                                class="rounded border-gray-300 dark:border-gray-600"
+                                class="rounded border-gray-300 dark:border"
                             />
                             <span class="text-sm text-gray-700 dark:text-gray-300"
                                 >Read only</span
@@ -588,7 +588,7 @@
                             <input
                                 type="checkbox"
                                 bind:checked={editShare.browseable}
-                                class="rounded border-gray-300 dark:border-gray-600"
+                                class="rounded border-gray-300 dark:border"
                             />
                             <span class="text-sm text-gray-700 dark:text-gray-300"
                                 >Browseable</span
@@ -598,7 +598,7 @@
                             <input
                                 type="checkbox"
                                 bind:checked={editShare.available}
-                                class="rounded border-gray-300 dark:border-gray-600"
+                                class="rounded border-gray-300 dark:border"
                             />
                             <span class="text-sm text-gray-700 dark:text-gray-300"
                                 >Available</span

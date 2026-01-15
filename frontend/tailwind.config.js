@@ -48,14 +48,14 @@ export default {
           600: '#dc2626',
           700: '#b91c1c',
         },
-        // Dark theme enhancements
-        dark: {
-          bg: '#0f172a',     // Deep blue-black
-          bgCard: '#1e293b',  // Card background
-          border: '#334155',  // Subtle borders
-          text: '#f1f5f9',    // Primary text
-          textMuted: '#94a3b8', // Secondary text
-        }
+        // Dark theme colors - use as dark:bg-surface, dark:bg-card, etc.
+        surface: '#09090b',      // Main background (deep near-black)
+        card: '#18181b',         // Card background
+        cardHover: '#1f2937',    // Card hover state
+        border: '#27272a',       // Subtle borders
+        borderLight: '#2d3139',  // Lighter borders for emphasis
+        input: '#1f2937',        // Input/select backgrounds
+        muted: '#27272a',        // Muted/secondary backgrounds
       },
       // Enhanced shadows for depth
       boxShadow: {

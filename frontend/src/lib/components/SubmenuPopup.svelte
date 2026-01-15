@@ -34,7 +34,7 @@
 
     <!-- Submenu Popup -->
     <div
-        class="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 min-w-48"
+        class="fixed z-50 bg-white dark:bg-card rounded-lg shadow-lg border border-gray-200 dark:border-border py-2 min-w-48"
         style="top: {position.top}px; left: {position.left}px;"
         role="menu"
         tabindex="-1"
@@ -51,7 +51,7 @@
                 class="flex items-center px-3 py-2 text-sm font-medium transition-colors duration-200 {$page
                     .url.pathname === item.href
                     ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
-                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}"
+                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-muted'}"
                 role="menuitem"
                 on:click={handleItemClick}
             >
