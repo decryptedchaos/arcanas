@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,6 +75,19 @@ func getDiskStats() ([]models.DiskHealth, error) {
 	for _, device := range lsblkData.Blockdevices {
 		disks = processDevice(device, disks)
 	}
+
+	// Sort disks: physical disks first, then RAID arrays
+	sort.Slice(disks, func(i, j int) bool {
+		// "disk" types come before "raid" types
+		if disks[i].Type == "disk" && disks[j].Type == "raid" {
+			return true
+		}
+		if disks[i].Type == "raid" && disks[j].Type == "disk" {
+			return false
+		}
+		// Within same type, sort by device name
+		return disks[i].Device < disks[j].Device
+	})
 
 	return disks, nil
 }
@@ -148,6 +162,7 @@ func processDevice(device LsblkDevice, disks []models.DiskHealth) []models.DiskH
 		Temperature: temp,
 		Health:      95,
 		SmartStatus: "healthy",
+		Type:        func() string { if isRAIDArray { return "raid" } else { return "disk" } }(),
 	})
 
 	// Process children (e.g., partitions)

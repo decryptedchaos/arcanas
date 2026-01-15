@@ -76,6 +76,7 @@ type DiskHealth struct {
 	Temperature float64 `json:"temperature"`
 	Health      int     `json:"health"`
 	SmartStatus string  `json:"smart_status"`
+	Type        string  `json:"type"` // "disk" or "raid" for frontend sorting
 }
 
 type SystemInfo struct {

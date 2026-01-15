@@ -18,7 +18,6 @@
     let loading = true;
     let error = null;
     let selectedDisk = null;
-    let expandedDisks = new Set();
 
     // RAID data
     let raidArrays = [];
@@ -316,32 +315,6 @@
         raidDeleteConfirmation = "";
     }
 
-    function toggleDiskExpansion(diskName) {
-        if (!diskName) return; // Guard against undefined
-        if (expandedDisks.has(diskName)) {
-            expandedDisks.delete(diskName);
-        } else {
-            expandedDisks.add(diskName);
-        }
-        expandedDisks = expandedDisks;
-    }
-
-    function getHealthColor(health) {
-        switch (health?.toLowerCase()) {
-            case "good":
-            case "healthy":
-                return "text-green-600 bg-green-100";
-            case "warning":
-            case "caution":
-                return "text-yellow-600 bg-yellow-100";
-            case "bad":
-            case "failed":
-                return "text-red-600 bg-red-100";
-            default:
-                return "text-gray-600 bg-gray-100";
-        }
-    }
-
     onMount(() => {
         // Initial load only
         loadDiskStats();
@@ -495,226 +468,328 @@
                 </div>
             {:else}
                 <div class="space-y-4">
-                    {#each disks as disk}
+                    {#each disks as disk, index}
+                        <!-- RAID Array Separator -->
+                        {#if disk.device && disk.device.startsWith('/dev/md') && (index === 0 || !disks[index - 1].device || !disks[index - 1].device.startsWith('/dev/md'))}
+                            <div class="relative my-6">
+                                <div class="absolute inset-0 flex items-center">
+                                    <div class="w-full border-t-2 border-indigo-300 dark:border-indigo-700"></div>
+                                </div>
+                                <div class="relative flex justify-center">
+                                    <span class="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-sm font-semibold rounded-full border-2 border-indigo-300 dark:border-indigo-700 flex items-center space-x-2">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/>
+                                        </svg>
+                                        <span>RAID Arrays</span>
+                                    </span>
+                                </div>
+                            </div>
+                        {/if}
+
                         <div
-                            class="bg-white dark:bg-gray-800 shadow rounded-lg"
+                            class="bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-gray-700 {disk.device && disk.device.startsWith('/dev/md') ? 'ring-2 ring-indigo-200 dark:ring-indigo-800' : ''}"
                         >
-                            <div class="p-6">
-                                <div class="flex justify-between items-start">
-                                    <div>
+                            <!-- Header Section -->
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <!-- Disk Icon with glow effect -->
+                                    <div
+                                        class="relative"
+                                    >
                                         <div
-                                            class="flex items-center space-x-3 mb-2"
-                                        >
-                                            <h3
-                                                class="text-lg font-semibold text-gray-900 dark:text-white"
-                                            >
-                                                {disk.name || disk.device || "Unknown"}
-                                            </h3>
-                                            <span
-                                                class="px-2 py-1 text-xs font-medium rounded-full {getHealthColor(
-                                                    disk.smart?.status ||
-                                                        disk.health ||
-                                                        "Unknown",
-                                                )}"
-                                            >
-                                                {disk.smart?.status || disk.health || "Unknown"}
-                                            </span>
-                                        </div>
-                                        <p
-                                            class="text-gray-600 dark:text-gray-300 mb-2"
-                                        >
-                                            {disk.model || "Unknown model"}
-                                        </p>
+                                            class="absolute inset-0 bg-gradient-to-br from-green-400 to-emerald-500 rounded-xl blur opacity-25"
+                                        ></div>
                                         <div
-                                            class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm"
+                                            class="relative w-14 h-14 bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 rounded-xl flex items-center justify-center shadow-lg"
                                         >
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Size
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {formatBytes(disk.size || 0)}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Used
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {disk.usage
-                                                        ? disk.usage.toFixed(1) + "%"
-                                                        : "N/A"}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Temperature
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {disk.smart?.temperature
-                                                        ? disk.smart.temperature +
-                                                            "°C"
-                                                        : "N/A"}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Filesystem
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {disk.filesystem || "Unknown"}
-                                                </p>
-                                            </div>
+                                            <svg
+                                                class="w-7 h-7 text-green-600 dark:text-green-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5h4M4 7h16"
+                                                />
+                                            </svg>
                                         </div>
                                     </div>
-                                    <button
-                                        on:click={() =>
-                                            toggleDiskExpansion(disk.name || disk.device)}
-                                        class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                                        title="Toggle disk details"
-                                        aria-label="Toggle disk details"
+
+                                    <div>
+                                        <h3
+                                            class="text-xl font-bold text-gray-900 dark:text-white"
+                                        >
+                                            {disk.name || disk.device || "Unknown"}
+                                        </h3>
+                                        <div
+                                            class="flex items-center flex-wrap gap-2 mt-1"
+                                        >
+                                            <!-- Filesystem Badge -->
+                                            {#if disk.filesystem && disk.filesystem !== "Unknown"}
+                                                <span
+                                                    class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-slate-500 to-slate-600 text-white"
+                                                >
+                                                    {disk.filesystem.toUpperCase()}
+                                                </span>
+                                            {/if}
+                                            <!-- Health Badge -->
+                                            {#if disk.smart?.status || disk.health}
+                                                <span
+                                                    class="px-2 py-0.5 text-xs font-semibold rounded-full {(disk.smart?.status === 'healthy' || disk.health === 'healthy')
+                                                        ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white'
+                                                        : (disk.smart?.status === 'warning' || disk.health === 'warning')
+                                                        ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white'
+                                                        : 'bg-gradient-to-r from-red-500 to-rose-500 text-white'}"
+                                                >
+                                                    {(disk.smart?.status || disk.health || "").toUpperCase()}
+                                                </span>
+                                            {/if}
+                                            <!-- Temperature Badge -->
+                                            {#if disk.smart?.temperature}
+                                                <span
+                                                    class="text-xs text-gray-500 dark:text-gray-400"
+                                                >
+                                                    {disk.smart.temperature}°C
+                                                </span>
+                                            {/if}
+                                            <!-- RAID Badge -->
+                                            {#if disk.device && disk.device.startsWith('/dev/md')}
+                                                <span
+                                                    class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white"
+                                                >
+                                                    RAID
+                                                </span>
+                                            {/if}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Usage Badge -->
+                                {#if disk.size}
+                                    <div
+                                        class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-700"
+                                    >
+                                        <span
+                                            class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                                        >
+                                            {Math.round(
+                                                ((disk.used || 0) / disk.size) *
+                                                    100,
+                                            )}%
+                                        </span>
+                                    </div>
+                                {/if}
+                            </div>
+
+                            <!-- Stats Grid -->
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
+                            >
+                                <!-- Total Size Card -->
+                                <div
+                                    class="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800"
+                                >
+                                    <div class="flex items-center space-x-3">
+                                        <div
+                                            class="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-blue-600 dark:text-blue-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Capacity
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {formatBytes(disk.size || 0)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Used Card -->
+                                <div
+                                    class="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800"
+                                >
+                                    <div class="flex items-center space-x-3">
+                                        <div
+                                            class="w-10 h-10 bg-purple-100 dark:bg-purple-800 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-purple-600 dark:text-purple-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-purple-600 dark:text-purple-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Used
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {formatBytes(disk.used || 0)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <!-- Usage Bar -->
+                                    {#if disk.size > 0}
+                                        <div
+                                            class="mt-3 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+                                        >
+                                            <div
+                                                class="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-300"
+                                                style="width: {Math.min(
+                                                    ((disk.used ||
+                                                        0) /
+                                                        disk.size) *
+                                                        100,
+                                                    100,
+                                                )}%"
+                                            ></div>
+                                        </div>
+                                    {/if}
+                                </div>
+
+                                <!-- Available Card -->
+                                <div
+                                    class="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800"
+                                >
+                                    <div class="flex items-center space-x-3">
+                                        <div
+                                            class="w-10 h-10 bg-emerald-100 dark:bg-emerald-800 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-emerald-600 dark:text-emerald-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Available
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {formatBytes(
+                                                    disk.available ||
+                                                        (disk.size || 0) -
+                                                            (disk.used ||
+                                                                0),
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Info Footer -->
+                            <div
+                                class="flex items-center justify-between pt-4 mt-4 border-t border-gray-200 dark:border-gray-700"
+                            >
+                                <div class="space-y-1">
+                                    <!-- Device Path -->
+                                    <div
+                                        class="flex items-center space-x-2 text-sm"
                                     >
                                         <svg
-                                            class="h-5 w-5"
+                                            class="w-4 h-4 text-gray-400"
                                             fill="none"
-                                            viewBox="0 0 24 24"
                                             stroke="currentColor"
+                                            viewBox="0 0 24 24"
                                         >
                                             <path
                                                 stroke-linecap="round"
                                                 stroke-linejoin="round"
                                                 stroke-width="2"
-                                                d="M19 9l-7 7-7-7"
+                                                d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
                                             />
                                         </svg>
-                                    </button>
-                                </div>
-                            </div>
-                            {#if expandedDisks.has(disk.name || disk.device)}
-                                <div
-                                    class="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-900/50"
-                                >
-                                    <h4 class="font-medium text-gray-900 dark:text-white mb-4">
-                                        Detailed Information
-                                    </h4>
+                                        <span
+                                            class="text-gray-500 dark:text-gray-400 font-mono text-xs"
+                                        >
+                                            {disk.device || "Unknown"}
+                                        </span>
+                                    </div>
+                                    <!-- Mount Point -->
                                     <div
-                                        class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"
+                                        class="flex items-center space-x-2 text-sm"
                                     >
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                Device Path
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {disk.device || "Unknown"}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                Mount Point
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {disk.mountpoint || "Not mounted"}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                Filesystem
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {disk.filesystem || "Unknown"}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                Used Space
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {formatBytes(disk.used || 0)}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                Available Space
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {formatBytes(disk.available || 0)}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                Usage Percentage
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {disk.usage
-                                                    ? disk.usage.toFixed(2) + "%"
-                                                    : "N/A"}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                Read-Only
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {disk.read_only
-                                                    ? "Yes"
-                                                    : "No"}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                SMART Health
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {disk.smart?.health
-                                                    ? disk.smart.health + "%"
-                                                    : "N/A"}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p
-                                                class="text-gray-500 dark:text-gray-400"
-                                            >
-                                                SMART Status
-                                            </p>
-                                            <p class="font-medium text-gray-900 dark:text-white">
-                                                {disk.smart?.status || "Unknown"}
-                                            </p>
-                                        </div>
+                                        <svg
+                                            class="w-4 h-4 text-gray-400"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                            />
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                            />
+                                        </svg>
+                                        <span
+                                            class="text-gray-500 dark:text-gray-400"
+                                        >
+                                            {disk.mountpoint || "Not mounted"}
+                                        </span>
                                     </div>
                                 </div>
-                            {/if}
+
+                                <!-- Model info -->
+                                {#if disk.model && disk.model !== "Unknown"}
+                                    <div
+                                        class="text-sm text-gray-500 dark:text-gray-400 text-right"
+                                    >
+                                        {disk.model}
+                                    </div>
+                                {/if}
+                            </div>
                         </div>
                     {/each}
                 </div>
@@ -747,15 +822,21 @@
                         <div
                             class="bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-gray-700"
                         >
-                            <div class="flex justify-between items-start">
-                                <div class="flex items-start space-x-4">
-                                    <!-- RAID Type Icon -->
-                                    <div class="flex-shrink-0">
+                            <!-- Header Section -->
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <!-- RAID Icon with glow effect -->
+                                    <div
+                                        class="relative"
+                                    >
                                         <div
-                                            class="w-12 h-12 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center"
+                                            class="absolute inset-0 bg-gradient-to-br from-orange-400 to-purple-500 rounded-xl blur opacity-25"
+                                        ></div>
+                                        <div
+                                            class="relative w-14 h-14 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/40 dark:to-purple-900/40 rounded-xl flex items-center justify-center shadow-lg"
                                         >
                                             <svg
-                                                class="w-6 h-6 text-orange-600 dark:text-orange-400"
+                                                class="w-7 h-7 text-orange-600 dark:text-orange-400"
                                                 fill="currentColor"
                                                 viewBox="0 0 20 20"
                                             >
@@ -766,95 +847,271 @@
                                         </div>
                                     </div>
 
-                                    <!-- RAID Info -->
                                     <div>
                                         <h3
-                                            class="text-lg font-semibold text-gray-900 dark:text-white mb-2"
+                                            class="text-xl font-bold text-gray-900 dark:text-white"
                                         >
                                             {array.name}
                                         </h3>
-                                        <p
-                                            class="text-gray-600 dark:text-gray-300 mb-4"
-                                        >
-                                            RAID Level: {array.level}
-                                        </p>
                                         <div
-                                            class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm"
+                                            class="flex items-center space-x-2 mt-1"
                                         >
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Size
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {formatBytes(array.size)}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Status
-                                                </p>
-                                                <div
-                                                    class="flex items-center space-x-1"
-                                                >
-                                                    <div
-                                                        class="w-2 h-2 rounded-full {array.state ===
-                                                        'active'
-                                                            ? 'bg-green-500'
-                                                            : 'bg-yellow-500'}"
-                                                    ></div>
-                                                    <p
-                                                        class="font-medium text-gray-900 dark:text-white"
-                                                    >
-                                                        {array.state || "Unknown"}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Devices
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {array.devices?.length || 0}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Used
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {array.used
-                                                        ? formatBytes(
-                                                              array.used,
-                                                          )
-                                                        : "N/A"}
-                                                </p>
-                                            </div>
+                                            <span
+                                                class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-orange-500 to-purple-500 text-white"
+                                            >
+                                                {array.level.toUpperCase()}
+                                            </span>
+                                            <span
+                                                class="text-sm text-gray-500 dark:text-gray-400"
+                                            >
+                                                {array.devices?.length || 0} device{(array.devices?.length || 0) !== 1 ? 's' : ''}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- RAID Actions -->
+                                <!-- Status Badge -->
+                                <div
+                                    class="flex items-center space-x-2 px-3 py-1.5 rounded-full {array.state === 'clean' || array.state === 'active'
+                                        ? 'bg-green-100 dark:bg-green-900/30'
+                                        : array.state === 'degraded'
+                                        ? 'bg-yellow-100 dark:bg-yellow-900/30'
+                                        : 'bg-red-100 dark:bg-red-900/30'}"
+                                >
+                                    <div
+                                        class="w-2.5 h-2.5 rounded-full {array.state === 'clean' || array.state === 'active'
+                                            ? 'bg-green-500 animate-pulse'
+                                            : array.state === 'degraded'
+                                            ? 'bg-yellow-500'
+                                            : 'bg-red-500'}"
+                                    ></div>
+                                    <span
+                                        class="text-sm font-medium {array.state === 'clean' || array.state === 'active'
+                                            ? 'text-green-700 dark:text-green-400'
+                                            : array.state === 'degraded'
+                                            ? 'text-yellow-700 dark:text-yellow-400'
+                                            : 'text-red-700 dark:text-red-400'}"
+                                    >
+                                        {array.state || "Unknown"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Stats Grid -->
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
+                            >
+                                <!-- Size Card -->
+                                <div
+                                    class="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800"
+                                >
+                                    <div class="flex items-center space-x-3">
+                                        <div
+                                            class="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-blue-600 dark:text-blue-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Total Size
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {formatBytes(array.size)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Used Card -->
+                                <div
+                                    class="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800"
+                                >
+                                    <div class="flex items-center space-x-3">
+                                        <div
+                                            class="w-10 h-10 bg-purple-100 dark:bg-purple-800 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-purple-600 dark:text-purple-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-purple-600 dark:text-purple-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Used Space
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {array.used
+                                                    ? formatBytes(
+                                                          array.used,
+                                                      )
+                                                    : "N/A"}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <!-- Usage Bar -->
+                                    {#if array.used && array.size}
+                                        <div
+                                            class="mt-3 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+                                        >
+                                            <div
+                                                class="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-300"
+                                                style="width: {Math.min(
+                                                    (array.used / array.size) * 100,
+                                                    100,
+                                                )}%"
+                                            ></div>
+                                        </div>
+                                    {/if}
+                                </div>
+
+                                <!-- Health Card -->
+                                <div
+                                    class="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800"
+                                >
+                                    <div class="flex items-center space-x-3">
+                                        <div
+                                            class="w-10 h-10 bg-emerald-100 dark:bg-emerald-800 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-emerald-600 dark:text-emerald-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Health
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {array.health}%
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Devices List -->
+                            <div>
+                                <div
+                                    class="flex items-center justify-between mb-3"
+                                >
+                                    <h4
+                                        class="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide"
+                                    >
+                                        Member Devices
+                                    </h4>
+                                    <span
+                                        class="text-xs text-gray-500 dark:text-gray-400"
+                                    >
+                                        {array.devices?.length || 0} disk{(array.devices?.length || 0) !== 1 ? 's' : ''}
+                                    </span>
+                                </div>
+                                <div
+                                    class="flex flex-wrap gap-2"
+                                >
+                                    {#each array.devices || [] as device}
+                                        <div
+                                            class="inline-flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+                                        >
+                                            <svg
+                                                class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
+                                                />
+                                            </svg>
+                                            <span
+                                                class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                                            >
+                                                {device}
+                                            </span>
+                                        </div>
+                                    {/each}
+                                </div>
+                            </div>
+
+                            <!-- Actions Footer -->
+                            <div
+                                class="flex items-center justify-between pt-4 mt-4 border-t border-gray-200 dark:border-gray-700"
+                            >
+                                <div
+                                    class="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                        />
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                        />
+                                    </svg>
+                                    <span>{array.mount_point || "Not mounted"}</span>
+                                </div>
                                 <button
                                     on:click={() => handleRAIDDelete(array)}
-                                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    class="inline-flex items-center space-x-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 rounded-lg transition-colors"
                                     title="Delete RAID Array"
                                 >
                                     <svg
-                                        class="w-5 h-5"
+                                        class="w-4 h-4"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -866,6 +1123,7 @@
                                             d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                                         />
                                     </svg>
+                                    <span>Delete Array</span>
                                 </button>
                             </div>
                         </div>
@@ -900,15 +1158,21 @@
                         <div
                             class="bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-gray-700"
                         >
-                            <div class="flex justify-between items-start">
-                                <div class="flex items-start space-x-4">
-                                    <!-- Pool Type Icon -->
-                                    <div class="flex-shrink-0">
+                            <!-- Header Section -->
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center space-x-4">
+                                    <!-- Pool Icon with glow effect -->
+                                    <div
+                                        class="relative"
+                                    >
                                         <div
-                                            class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center"
+                                            class="absolute inset-0 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-xl blur opacity-25"
+                                        ></div>
+                                        <div
+                                            class="relative w-14 h-14 bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/40 dark:to-cyan-900/40 rounded-xl flex items-center justify-center shadow-lg"
                                         >
                                             <svg
-                                                class="w-6 h-6 text-blue-600 dark:text-blue-400"
+                                                class="w-7 h-7 text-blue-600 dark:text-blue-400"
                                                 fill="currentColor"
                                                 viewBox="0 0 20 20"
                                             >
@@ -919,151 +1183,308 @@
                                         </div>
                                     </div>
 
-                                    <!-- Pool Info -->
                                     <div>
                                         <h3
-                                            class="text-lg font-semibold text-gray-900 dark:text-white mb-2"
+                                            class="text-xl font-bold text-gray-900 dark:text-white"
                                         >
                                             {pool.name}
                                         </h3>
-                                        <p
-                                            class="text-gray-600 dark:text-gray-300 mb-4"
-                                        >
-                                            Storage Pool
-                                        </p>
                                         <div
-                                            class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm"
+                                            class="flex items-center space-x-2 mt-1"
                                         >
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Size
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {formatBytes(pool.size)}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Used
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {formatBytes(pool.used)}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Available
-                                                </p>
-                                                <p
-                                                    class="font-medium text-gray-900 dark:text-white"
-                                                >
-                                                    {formatBytes(
-                                                        pool.available,
-                                                    )}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p
-                                                    class="text-gray-500 dark:text-gray-400"
-                                                >
-                                                    Status
-                                                </p>
-                                                <div
-                                                    class="flex items-center space-x-1"
-                                                >
-                                                    <div
-                                                        class="w-2 h-2 rounded-full {pool.state ===
-                                                        'active'
-                                                            ? 'bg-green-500'
-                                                            : 'bg-gray-400'}"
-                                                    ></div>
-                                                    <p
-                                                        class="font-medium text-gray-900 dark:text-white"
-                                                    >
-                                                        {pool.state ||
-                                                            "Inactive"}
-                                                    </p>
-                                                </div>
-                                            </div>
+                                            <span
+                                                class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                                            >
+                                                STORAGE POOL
+                                            </span>
+                                            <span
+                                                class="text-sm text-gray-500 dark:text-gray-400"
+                                            >
+                                                {pool.devices?.length || 0} volume{(pool.devices?.length || 0) !== 1 ? 's' : ''}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Action Buttons -->
-                                <div class="relative">
-                                    <button
-                                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                        on:click|stopPropagation={() =>
-                                            toggleDropdown(pool.name)}
-                                        aria-label="Pool actions menu"
+                                <!-- Status Badge -->
+                                <div
+                                    class="flex items-center space-x-2 px-3 py-1.5 rounded-full {pool.state === 'active'
+                                        ? 'bg-green-100 dark:bg-green-900/30'
+                                        : 'bg-gray-100 dark:bg-gray-700'}"
+                                >
+                                    <div
+                                        class="w-2.5 h-2.5 rounded-full {pool.state === 'active'
+                                            ? 'bg-green-500 animate-pulse'
+                                            : 'bg-gray-400'}"
+                                    ></div>
+                                    <span
+                                        class="text-sm font-medium {pool.state === 'active'
+                                            ? 'text-green-700 dark:text-green-400'
+                                            : 'text-gray-600 dark:text-gray-400'}"
                                     >
-                                        <svg
-                                            class="w-5 h-5"
-                                            fill="currentColor"
-                                            viewBox="0 0 20 20"
-                                        >
-                                            <path
-                                                d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"
-                                            />
-                                        </svg>
-                                    </button>
-                                    <!-- Dropdown Menu -->
-                                    {#if openDropdown === pool.name}
+                                        {pool.state || "Inactive"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Stats Grid -->
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"
+                            >
+                                <!-- Total Size Card -->
+                                <div
+                                    class="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800"
+                                >
+                                    <div class="flex items-center space-x-3">
                                         <div
-                                            class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10"
+                                            class="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-lg flex items-center justify-center"
                                         >
-                                            <div class="py-1">
-                                                <button
-                                                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                    on:click={() => {
-                                                        closeDropdowns();
-                                                        handlePoolAction(
-                                                            "mount",
-                                                            pool,
-                                                        );
-                                                    }}
-                                                >
-                                                    {pool.state === "active"
-                                                        ? "Unmount"
-                                                        : "Mount"}
-                                                </button>
-                                                <button
-                                                    class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                    on:click={() => {
-                                                        closeDropdowns();
-                                                        handlePoolAction(
-                                                            "details",
-                                                            pool,
-                                                        );
-                                                    }}
-                                                >
-                                                    View Details
-                                                </button>
-                                                <button
-                                                    class="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                    on:click={() => {
-                                                        closeDropdowns();
-                                                        handlePoolAction(
-                                                            "delete",
-                                                            pool,
-                                                        );
-                                                    }}
-                                                >
-                                                    Delete Pool
-                                                </button>
-                                            </div>
+                                            <svg
+                                                class="w-5 h-5 text-blue-600 dark:text-blue-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Total Size
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {formatBytes(pool.size)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Used Card -->
+                                <div
+                                    class="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800"
+                                >
+                                    <div class="flex items-center space-x-3">
+                                        <div
+                                            class="w-10 h-10 bg-purple-100 dark:bg-purple-800 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-purple-600 dark:text-purple-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-purple-600 dark:text-purple-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Used Space
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {formatBytes(pool.used)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <!-- Usage Bar -->
+                                    {#if pool.size > 0}
+                                        <div
+                                            class="mt-3 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden"
+                                        >
+                                            <div
+                                                class="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-300"
+                                                style="width: {Math.min(
+                                                    (pool.used / pool.size) * 100,
+                                                    100,
+                                                )}%"
+                                            ></div>
                                         </div>
                                     {/if}
+                                </div>
+
+                                <!-- Available Card -->
+                                <div
+                                    class="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800"
+                                >
+                                    <div class="flex items-center space-x-3">
+                                        <div
+                                            class="w-10 h-10 bg-emerald-100 dark:bg-emerald-800 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-emerald-600 dark:text-emerald-400"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p
+                                                class="text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide"
+                                            >
+                                                Available
+                                            </p>
+                                            <p
+                                                class="text-lg font-bold text-gray-900 dark:text-white"
+                                            >
+                                                {formatBytes(
+                                                    pool.available,
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Devices List -->
+                            {#if pool.devices && pool.devices.length > 0}
+                                <div class="mb-6">
+                                    <div
+                                        class="flex items-center justify-between mb-3"
+                                    >
+                                        <h4
+                                            class="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide"
+                                        >
+                                            Volumes
+                                        </h4>
+                                        <span
+                                            class="text-xs text-gray-500 dark:text-gray-400"
+                                        >
+                                            {pool.devices?.length || 0} volume{(pool.devices?.length || 0) !== 1 ? 's' : ''}
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="flex flex-wrap gap-2"
+                                    >
+                                        {#each pool.devices || [] as device}
+                                            <div
+                                                class="inline-flex items-center space-x-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+                                            >
+                                                <svg
+                                                    class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                                                    />
+                                                </svg>
+                                                <span
+                                                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                                                >
+                                                    {device}
+                                                </span>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                </div>
+                            {/if}
+
+                            <!-- Actions Footer -->
+                            <div
+                                class="flex items-center justify-between pt-4 mt-4 border-t border-gray-200 dark:border-gray-700"
+                            >
+                                <div
+                                    class="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400"
+                                >
+                                    <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                        />
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                        />
+                                    </svg>
+                                    <span>{pool.mount_point || "Not mounted"}</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button
+                                        on:click={() => {
+                                            handlePoolAction(
+                                                "mount",
+                                                pool,
+                                            );
+                                        }}
+                                        class="inline-flex items-center space-x-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:text-blue-400 rounded-lg transition-colors"
+                                    >
+                                        <svg
+                                            class="w-4 h-4"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
+                                        <span>{pool.state === "active"
+                                            ? "Unmount"
+                                            : "Mount"}</span>
+                                    </button>
+                                    <button
+                                        on:click={() =>
+                                            handlePoolAction(
+                                                "delete",
+                                                pool,
+                                            )}
+                                        class="inline-flex items-center space-x-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 rounded-lg transition-colors"
+                                    >
+                                        <svg
+                                            class="w-4 h-4"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                            />
+                                        </svg>
+                                        <span>Delete</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>

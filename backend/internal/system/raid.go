@@ -109,13 +109,20 @@ func getRAIDDetails(device string) (models.RAIDArray, error) {
 				}
 			}
 		} else if strings.Contains(line, "State :") {
-			// Extract state from "State : clean"
+			// Extract state from "State : clean" or "State : active, clean"
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) == 2 {
-				array.State = strings.TrimSpace(parts[1])
-				// Remove any trailing comma or whitespace
-				array.State = strings.TrimSuffix(array.State, ",")
-				array.State = strings.TrimSpace(array.State)
+				rawState := strings.TrimSpace(parts[1])
+				stateLower := strings.ToLower(rawState)
+				// Normalize state: "clean" and "active" both mean healthy, use "clean" for consistency
+				// RAID arrays can show "active", "clean", or "active, clean" - all mean healthy
+				if strings.Contains(stateLower, "clean") || strings.Contains(stateLower, "active") {
+					array.State = "clean"
+				} else {
+					// For other states like "degraded", "failed", use as-is
+					array.State = strings.TrimSuffix(rawState, ",")
+					array.State = strings.TrimSpace(array.State)
+				}
 			}
 		} else if strings.Contains(line, "UUID :") {
 			// Extract UUID
@@ -152,7 +159,11 @@ func parseRAIDDevicesFromDetail(output string) []string {
 		if strings.HasPrefix(line, "/dev/") || re.MatchString(line) {
 			matches := re.FindAllString(line, -1)
 			for _, match := range matches {
-				devices = append(devices, match)
+				// Exclude the md device itself (e.g., /dev/md0, /dev/md1)
+				// Only include physical member devices
+				if !strings.HasPrefix(match, "/dev/md") {
+					devices = append(devices, match)
+				}
 			}
 		}
 	}
@@ -288,9 +299,31 @@ func parseSize(sizeStr string) (int64, error) {
 }
 
 func getMountPointAndUsage(device string) (string, int64) {
-	// Find mount point and usage using df
-	cmd := exec.Command("df", "--output=target,used", device)
+	// First, try to find mount point using lsblk (more reliable)
+	cmd := exec.Command("lsblk", "-no", "MOUNTPOINT", device)
 	output, err := cmd.Output()
+	if err == nil {
+		mountPoint := strings.TrimSpace(string(output))
+		if mountPoint != "" && mountPoint != "/" {
+			// Device is mounted, get usage
+			cmd := exec.Command("df", "-B1", "--output=used", mountPoint)
+			dfOutput, dfErr := cmd.Output()
+			if dfErr == nil {
+				lines := strings.Split(string(dfOutput), "\n")
+				if len(lines) >= 2 {
+					fields := strings.Fields(lines[1])
+					if len(fields) >= 1 {
+						used, _ := strconv.ParseInt(fields[0], 10, 64)
+						return mountPoint, used
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: try df directly on device
+	cmd = exec.Command("df", "-B1", "--output=target,used", device)
+	output, err = cmd.Output()
 	if err != nil {
 		return "", 0
 	}

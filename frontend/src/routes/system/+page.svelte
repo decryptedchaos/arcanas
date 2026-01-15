@@ -868,60 +868,132 @@
         Storage Health
       </h3>
       <div class="space-y-4">
-        {#each systemStats?.storage?.disks || [] as disk}
-          <div
-            class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
-          >
-            <div class="flex-1">
-              <div class="flex items-center space-x-3 mb-2">
-                <h4 class="font-medium text-gray-900 dark:text-white">
-                  {disk?.device || "Unknown"}
-                </h4>
-                <span
-                  class="px-2 py-1 text-xs font-medium rounded-full {disk?.smart_status ===
-                  'healthy'
-                    ? 'bg-green-100 text-green-600'
-                    : 'bg-yellow-100 text-yellow-600'}"
-                >
-                  {disk?.smart_status || "Unknown"}
+        {#each systemStats?.storage?.disks || [] as disk, index}
+          <!-- RAID Array Separator -->
+          {#if disk && disk.type && disk.type === 'raid' && (index === 0 || !systemStats?.storage?.disks[index - 1] || systemStats?.storage?.disks[index - 1].type !== 'raid')}
+            <div class="relative my-6">
+              <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t-2 border-indigo-300 dark:border-indigo-700"></div>
+              </div>
+              <div class="relative flex justify-center">
+                <span class="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-sm font-semibold rounded-full border-2 border-indigo-300 dark:border-indigo-700 flex items-center space-x-2">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/>
+                  </svg>
+                  <span>RAID Arrays</span>
                 </span>
               </div>
-              <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">
-                {disk?.model || "Unknown"}
-              </p>
-              <div class="flex items-center space-x-6 text-sm">
-                <span class="text-gray-600 dark:text-gray-300"
-                  >Size: {formatBytes(
-                    (disk?.size || 0) * 1024 * 1024 * 1024,
-                  )}</span
-                >
-                <span class="text-gray-600 dark:text-gray-300"
-                  >Used: {formatBytes(
-                    (disk?.used || 0) * 1024 * 1024 * 1024,
-                  )}</span
-                >
-                <span class="text-gray-600 dark:text-gray-300"
-                  >Temp: {disk?.temperature || 0}°C</span
-                >
-                <span class="text-gray-600 dark:text-gray-300"
-                  >Health: {disk?.health || 0}%</span
-                >
+            </div>
+          {/if}
+
+          <!-- Disk Card -->
+          <div class="bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-gray-700 {disk?.type === 'raid' ? 'ring-2 ring-indigo-200 dark:ring-indigo-800' : ''}">
+            <!-- Header Section -->
+            <div class="flex items-start justify-between mb-6">
+              <div class="flex items-center space-x-4">
+                <!-- Disk Icon with glow effect -->
+                <div class="relative">
+                  <div class="absolute inset-0 {disk?.type === 'raid'
+                    ? 'bg-gradient-to-br from-indigo-400 to-purple-500'
+                    : 'bg-gradient-to-br from-green-400 to-emerald-500'} rounded-xl blur opacity-25"></div>
+                  <div class="relative w-14 h-14 {disk?.type === 'raid'
+                    ? 'bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40'
+                    : 'bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40'} rounded-xl flex items-center justify-center shadow-lg">
+                    <svg class="w-7 h-7 {disk?.type === 'raid' ? 'text-indigo-600 dark:text-indigo-400' : 'text-green-600 dark:text-green-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5h4M4 7h16"/>
+                    </svg>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+                    {disk?.device || "Unknown"}
+                  </h3>
+                  <div class="flex items-center flex-wrap gap-2 mt-1">
+                    <!-- Health Badge -->
+                    {#if disk?.smart_status}
+                      <span class="px-2 py-0.5 text-xs font-semibold rounded-full {disk?.smart_status === 'healthy'
+                        ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white'
+                        : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white'}">
+                        {disk.smart_status.toUpperCase()}
+                      </span>
+                    {/if}
+                    <!-- Temperature Badge -->
+                    {#if disk?.temperature}
+                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                        {disk.temperature}°C
+                      </span>
+                    {/if}
+                    <!-- RAID Badge -->
+                    {#if disk?.type === 'raid'}
+                      <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
+                        RAID
+                      </span>
+                    {/if}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <!-- Usage Bar -->
-            <div class="w-32 ml-4">
-              <div class="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                Usage
+            <!-- Disk Details -->
+            <div class="space-y-4">
+              <!-- Model -->
+              <div>
+                <p class="text-sm text-gray-600 dark:text-gray-300">
+                  {disk?.model || "Unknown Model"}
+                </p>
               </div>
-              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div
-                  class="bg-purple-600 h-2 rounded-full"
-                  style="width: {disk?.size
-                    ? ((disk?.used || 0) / disk?.size) * 100
-                    : 0}%"
-                ></div>
+
+              <!-- Capacity & Usage -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                    Capacity
+                  </p>
+                  <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {formatBytes(disk?.size || 0)}
+                  </p>
+                </div>
+                <div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                    Used Space
+                  </p>
+                  <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {formatBytes(disk?.used || 0)}
+                  </p>
+                </div>
               </div>
+
+              <!-- Usage Progress Bar -->
+              <div>
+                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  <span>Usage</span>
+                  <span>{disk?.size && disk.size > 0 ? ((disk?.used || 0) / disk.size * 100).toFixed(1) : 0}%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                  <div class="{disk?.type === 'raid' ? 'bg-indigo-600' : 'bg-gradient-to-r from-emerald-500 to-green-500'} h-3 rounded-full transition-all duration-500"
+                    style="width: {disk?.size && disk.size > 0 ? ((disk?.used || 0) / disk.size * 100) : 0}%"></div>
+                </div>
+              </div>
+
+              <!-- Health Status -->
+              {#if disk?.health !== undefined}
+                <div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                    Health Status
+                  </p>
+                  <div class="flex items-center space-x-2">
+                    <div class="w-2 h-2 rounded-full {disk.health >= 90
+                      ? 'bg-green-500'
+                      : disk.health >= 70
+                      ? 'bg-yellow-500'
+                      : 'bg-red-500'}"></div>
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                      {disk.health}% Good
+                    </span>
+                  </div>
+                </div>
+              {/if}
             </div>
           </div>
         {/each}

@@ -208,13 +208,20 @@ func createMergerFSPool(req models.StoragePoolCreateRequest) error {
 		config = "defaults,allow_other,use_ino"
 	}
 
-	// Mount with mergerfs using sudo
-	// The source will be displayed as "b:c" in df due to path truncation, but the mount works correctly
-	cmd = exec.Command("sudo", "mergerfs", devicesStr, mountPoint, "-o", config)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		// Cleanup mount point on failure
-		exec.Command("sudo", "rmdir", mountPoint).Run()
-		return fmt.Errorf("failed to mount mergerfs: %v, output: %s", err, string(output))
+	// Mount with mergerfs using systemd-run for persistence
+	// This ensures mergerfs runs as a independent service, not a child of arcanas
+	// Using systemd-run --user would be ideal but requires user session, using system scope
+	unitName := "mergerfs-" + strings.ReplaceAll(req.Name, "-", "--") + ".mount"
+	cmd = exec.Command("sudo", "systemd-run", "--unit="+unitName, "--scope", "mergerfs", devicesStr, mountPoint, "-o", config)
+	if _, err := cmd.CombinedOutput(); err != nil {
+		// Fallback: try direct mount (may not persist across arcanas restarts)
+		fmt.Printf("systemd-run failed, trying direct mount: %v\n", err)
+		cmd = exec.Command("sudo", "mergerfs", devicesStr, mountPoint, "-o", config)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			// Cleanup mount point on failure
+			exec.Command("sudo", "rmdir", mountPoint).Run()
+			return fmt.Errorf("failed to mount mergerfs: %v, output: %s", err, string(output))
+		}
 	}
 
 	// Verify the mount was successful
