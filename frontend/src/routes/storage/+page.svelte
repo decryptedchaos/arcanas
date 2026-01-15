@@ -38,6 +38,19 @@
     let selectedPoolDetails = null;
     let openDropdown = null; // Track which dropdown is open
     let showCreatePoolModal = false;
+    let showCreateRAIDModal = false;
+
+    // RAID form data
+    let newRAID = {
+        name: "",
+        level: "raid0",
+        devices: []
+    };
+
+    // RAID array actions
+    let showRAIDDeleteModal = false;
+    let raidToDelete = null;
+    let raidDeleteConfirmation = "";
 
     // Notification system
     let notifications = [];
@@ -228,6 +241,81 @@
         }
     }
 
+    // RAID Functions
+    async function createRAIDArray() {
+        try {
+            if (!newRAID.name) {
+                showNotification("Please enter a RAID array name", "warning");
+                return;
+            }
+            if (!newRAID.devices || newRAID.devices.length === 0) {
+                showNotification("Please select at least one disk", "warning");
+                return;
+            }
+
+            const raidData = {
+                name: newRAID.name,
+                level: newRAID.level,
+                devices: newRAID.devices
+            };
+
+            await diskAPI.createRAIDArray(raidData);
+            showCreateRAIDModal = false;
+            resetRAIDForm();
+            await loadRAIDArrays();
+            await loadDiskStats(); // Refresh to show new md device
+            showNotification("RAID array created successfully", "success");
+        } catch (err) {
+            console.error("Failed to create RAID array:", err);
+            showNotification("Failed to create RAID array: " + err.message, "error");
+        }
+    }
+
+    function resetRAIDForm() {
+        newRAID = {
+            name: "",
+            level: "raid0",
+            devices: []
+        };
+    }
+
+    function toggleRAIDDevice(devicePath) {
+        if (newRAID.devices.includes(devicePath)) {
+            newRAID.devices = newRAID.devices.filter(d => d !== devicePath);
+        } else {
+            newRAID.devices = [...newRAID.devices, devicePath];
+        }
+    }
+
+    function handleRAIDDelete(array) {
+        raidToDelete = array;
+        raidDeleteConfirmation = `DELETE ${array.name.toUpperCase()}`;
+        showRAIDDeleteModal = true;
+    }
+
+    async function confirmRAIDDelete() {
+        if (!raidToDelete) return;
+
+        try {
+            await diskAPI.deleteRAIDArray(raidToDelete.name);
+            showRAIDDeleteModal = false;
+            raidToDelete = null;
+            raidDeleteConfirmation = "";
+            await loadRAIDArrays();
+            await loadDiskStats();
+            showNotification("RAID array deleted successfully", "success");
+        } catch (err) {
+            console.error("Failed to delete RAID array:", err);
+            showNotification("Failed to delete RAID array: " + err.message, "error");
+        }
+    }
+
+    function cancelRAIDDelete() {
+        showRAIDDeleteModal = false;
+        raidToDelete = null;
+        raidDeleteConfirmation = "";
+    }
+
     function toggleDiskExpansion(diskName) {
         if (!diskName) return; // Guard against undefined
         if (expandedDisks.has(diskName)) {
@@ -264,6 +352,18 @@
     $: disks = Array.isArray(diskStats) ? diskStats : [];
     $: raidArraysSafe = Array.isArray(raidArrays) ? raidArrays : [];
     $: storagePoolsSafe = Array.isArray(storagePools) ? storagePools : [];
+
+    // Close dropdowns on outside click
+    function handleOutsideClick(e) {
+        closeDropdowns();
+    }
+
+    // Close dropdowns on Escape key
+    function handleEscapeKey(e) {
+        if (e.key === "Escape") {
+            closeDropdowns();
+        }
+    }
 </script>
 
 <div class="p-6" role="main" tabindex="-1">
@@ -348,7 +448,12 @@
         {#if activeTab === "disks"}
             <button class="btn btn-primary">Scan for New Disks</button>
         {:else if activeTab === "raid"}
-            <button class="btn btn-primary">Create RAID Array</button>
+            <button
+                on:click={() => (showCreateRAIDModal = true)}
+                class="btn btn-primary"
+            >
+                Create RAID Array
+            </button>
         {:else if activeTab === "pools"}
             <button
                 on:click={() => (showCreatePoolModal = true)}
@@ -360,12 +465,7 @@
     </div>
 
     <!-- Tab Content -->
-    <div
-        on:click={closeDropdowns}
-        on:keydown={(e) => {
-            if (e.key === "Escape") closeDropdowns();
-        }}
-    >
+    <div role="region">
         <!-- Disks Tab -->
         {#if activeTab === "disks"}
             {#if loading}
@@ -703,7 +803,7 @@
                                                     class="flex items-center space-x-1"
                                                 >
                                                     <div
-                                                        class="w-2 h-2 rounded-full {array.status ===
+                                                        class="w-2 h-2 rounded-full {array.state ===
                                                         'active'
                                                             ? 'bg-green-500'
                                                             : 'bg-yellow-500'}"
@@ -711,7 +811,7 @@
                                                     <p
                                                         class="font-medium text-gray-900 dark:text-white"
                                                     >
-                                                        {array.status}
+                                                        {array.state || "Unknown"}
                                                     </p>
                                                 </div>
                                             </div>
@@ -746,6 +846,27 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- RAID Actions -->
+                                <button
+                                    on:click={() => handleRAIDDelete(array)}
+                                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    title="Delete RAID Array"
+                                >
+                                    <svg
+                                        class="w-5 h-5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                        />
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                     {/each}
@@ -783,49 +904,19 @@
                                 <div class="flex items-start space-x-4">
                                     <!-- Pool Type Icon -->
                                     <div class="flex-shrink-0">
-                                        {#if pool.type === "mergerfs"}
-                                            <div
-                                                class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center"
+                                        <div
+                                            class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center"
+                                        >
+                                            <svg
+                                                class="w-6 h-6 text-blue-600 dark:text-blue-400"
+                                                fill="currentColor"
+                                                viewBox="0 0 20 20"
                                             >
-                                                <svg
-                                                    class="w-6 h-6 text-blue-600 dark:text-blue-400"
-                                                    fill="currentColor"
-                                                    viewBox="0 0 20 20"
-                                                >
-                                                    <path
-                                                        d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"
-                                                    />
-                                                </svg>
-                                            </div>
-                                        {:else if pool.type === "lvm"}
-                                            <div
-                                                class="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center"
-                                            >
-                                                <svg
-                                                    class="w-6 h-6 text-purple-600 dark:text-purple-400"
-                                                    fill="currentColor"
-                                                    viewBox="0 0 20 20"
-                                                >
-                                                    <path
-                                                        d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"
-                                                    />
-                                                </svg>
-                                            </div>
-                                        {:else}
-                                            <div
-                                                class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center"
-                                            >
-                                                <svg
-                                                    class="w-6 h-6 text-gray-600 dark:text-gray-400"
-                                                    fill="currentColor"
-                                                    viewBox="0 0 20 20"
-                                                >
-                                                    <path
-                                                        d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                                                    />
-                                                </svg>
-                                            </div>
-                                        {/if}
+                                                <path
+                                                    d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"
+                                                />
+                                            </svg>
+                                        </div>
                                     </div>
 
                                     <!-- Pool Info -->
@@ -838,7 +929,7 @@
                                         <p
                                             class="text-gray-600 dark:text-gray-300 mb-4"
                                         >
-                                            {pool.type || "Unknown type"} Pool
+                                            Storage Pool
                                         </p>
                                         <div
                                             class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm"
@@ -1099,7 +1190,7 @@
                                     Type
                                 </p>
                                 <p class="text-gray-900 dark:text-white">
-                                    {selectedPoolDetails?.type || "Unknown"}
+                                    Storage Pool
                                 </p>
                             </div>
                             <div>
@@ -1201,13 +1292,7 @@
 
         <!-- Create Storage Pool Modal -->
         {#if showCreatePoolModal}
-            <div
-                class="fixed inset-0 z-50 overflow-y-auto"
-                on:click={() => {
-                    showCreatePoolModal = false;
-                    resetPoolForm();
-                }}
-            >
+            <div class="fixed inset-0 z-50 overflow-y-auto">
                 <div class="flex items-center justify-center min-h-screen px-4">
                     <div
                         class="fixed inset-0 bg-gray-500 bg-opacity-75"
@@ -1223,9 +1308,15 @@
                     ></div>
                     <div
                         class="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="create-pool-title"
+                        tabindex="-1"
                         on:click|stopPropagation
+                        on:keydown|stopPropagation
                     >
                         <h3
+                            id="create-pool-title"
                             class="text-lg font-medium text-gray-900 dark:text-white mb-4"
                         >
                             Create Storage Pool
@@ -1260,16 +1351,14 @@
                                     bind:value={newPool.type}
                                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                                 >
-                                    <option value="mergerfs">MergerFS (JBOD)</option>
-                                    <option value="lvm">LVM (RAID-like)</option>
-                                    <option value="bind">Bind Mount</option>
+                                    <option value="mergerfs">Combined Storage</option>
                                 </select>
                             </div>
 
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            <fieldset class="border-0 p-0 m-0">
+                                <legend class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Select Disks
-                                </label>
+                                </legend>
                                 {#if diskStats.length === 0}
                                     <div class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center">
                                         No disks available. Please add disks to the system first.
@@ -1309,7 +1398,7 @@
                                         {newPool.devices.length} disk(s) selected
                                     </p>
                                 {/if}
-                            </div>
+                            </fieldset>
 
                             <div>
                                 <label
@@ -1350,5 +1439,239 @@
                 </div>
             </div>
         {/if}
+
+        <!-- RAID Delete Confirmation Modal -->
+        {#if showRAIDDeleteModal}
+            <div
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            >
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4"
+                >
+                    <div class="flex items-center mb-4">
+                        <svg
+                            class="w-6 h-6 text-red-600 mr-3"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                        >
+                            <path
+                                fill-rule="evenodd"
+                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                                clip-rule="evenodd"
+                            />
+                        </svg>
+                        <h3
+                            class="text-lg font-semibold text-gray-900 dark:text-white"
+                        >
+                            Delete RAID Array
+                        </h3>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-300 mb-4">
+                        Are you sure you want to delete the RAID array "{raidToDelete?.name}"?
+                        This will stop the array and zero the superblock on all member devices.
+                        This action cannot be undone.
+                    </p>
+                    <div class="mb-4">
+                        <label
+                            for="raidDeleteConfirmation"
+                            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                        >
+                            Type <span class="text-red-600">*</span> to confirm:
+                        </label>
+                        <input
+                            id="raidDeleteConfirmation"
+                            type="text"
+                            bind:value={raidDeleteConfirmation}
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                            placeholder="DELETE {raidToDelete?.name.toUpperCase()}"
+                        />
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button
+                            type="button"
+                            class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                            on:click={cancelRAIDDelete}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            class="px-4 py-2 bg-red-600 text-white rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                            disabled={raidDeleteConfirmation !==
+                                `DELETE ${raidToDelete?.name.toUpperCase()}`}
+                            on:click={confirmRAIDDelete}
+                        >
+                            Delete RAID Array
+                        </button>
+                    </div>
+                </div>
+            </div>
+        {/if}
+
+        <!-- Create RAID Array Modal -->
+        {#if showCreateRAIDModal}
+            <div
+                class="fixed inset-0 z-50 overflow-y-auto"
+                on:click={() => {
+                    showCreateRAIDModal = false;
+                    resetRAIDForm();
+                }}
+            >
+                <div class="flex items-center justify-center min-h-screen px-4">
+                    <div
+                        class="fixed inset-0 bg-gray-500 bg-opacity-75"
+                        role="button"
+                        tabindex="0"
+                        on:click={() => {
+                            showCreateRAIDModal = false;
+                            resetRAIDForm();
+                        }}
+                        on:keydown={(e) =>
+                            e.key === "Escape" && (showCreateRAIDModal = false)}
+                        aria-label="Close modal"
+                    ></div>
+                    <div
+                        class="relative bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="create-raid-title"
+                        tabindex="-1"
+                        on:click|stopPropagation
+                        on:keydown|stopPropagation
+                    >
+                        <h3
+                            id="create-raid-title"
+                            class="text-lg font-medium text-gray-900 dark:text-white mb-4"
+                        >
+                            Create RAID Array
+                        </h3>
+                        <form on:submit|preventDefault={createRAIDArray} class="space-y-4">
+                            <div>
+                                <label
+                                    for="raidName"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                                >
+                                    Array Name (e.g., md0, md1)
+                                </label>
+                                <input
+                                    id="raidName"
+                                    type="text"
+                                    bind:value={newRAID.name}
+                                    placeholder="md0"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    for="raidLevel"
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                                >
+                                    RAID Level
+                                </label>
+                                <select
+                                    id="raidLevel"
+                                    bind:value={newRAID.level}
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="raid0">RAID 0 (Striping)</option>
+                                    <option value="raid1">RAID 1 (Mirroring)</option>
+                                    <option value="raid5">RAID 5 (Parity)</option>
+                                    <option value="raid6">RAID 6 (Dual Parity)</option>
+                                    <option value="raid10">RAID 10 (Mirroring + Striping)</option>
+                                </select>
+                            </div>
+
+                            <fieldset class="border-0 p-0 m-0">
+                                <legend class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Select Disks
+                                </legend>
+                                {#if diskStats.length === 0}
+                                    <div class="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center">
+                                        No disks available. Please add disks to the system first.
+                                    </div>
+                                {:else}
+                                    <div class="border border-gray-300 dark:border-gray-600 rounded-md p-4 max-h-60 overflow-y-auto bg-gray-50 dark:bg-gray-700">
+                                        {#each diskStats as disk}
+                                            {#if disk.device && disk.device !== "" && !disk.device.includes("/dev/md")}
+                                                <label class="flex items-center space-x-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-600 rounded cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={newRAID.devices.includes(disk.device)}
+                                                        on:change={() => toggleRAIDDevice(disk.device)}
+                                                        class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-800"
+                                                    />
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center space-x-2">
+                                                            <span class="font-medium text-gray-900 dark:text-white">
+                                                                {disk.name || disk.device}
+                                                            </span>
+                                                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                                ({disk.model || "Unknown model"})
+                                                            </span>
+                                                        </div>
+                                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                            {disk.device} • {formatBytes(disk.size || 0)}
+                                                            {#if disk.filesystem}
+                                                                • {disk.filesystem}
+                                                            {/if}
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            {/if}
+                                        {/each}
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                        {newRAID.devices.length} disk(s) selected
+                                    </p>
+                                {/if}
+                            </fieldset>
+
+                            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                                <div class="flex">
+                                    <svg
+                                        class="w-5 h-5 text-yellow-400 mr-2"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                    >
+                                        <path
+                                            fill-rule="evenodd"
+                                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                                            clip-rule="evenodd"
+                                        />
+                                    </svg>
+                                    <div class="text-sm text-yellow-800 dark:text-yellow-200">
+                                        <strong>Warning:</strong> Creating a RAID array will erase all data on the selected disks.
+                                        Make sure you have backups if needed.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end space-x-3 mt-6">
+                                <button
+                                    type="button"
+                                    on:click={() => {
+                                        showCreateRAIDModal = false;
+                                        resetRAIDForm();
+                                    }}
+                                    class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                >
+                                    Create RAID Array
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        {/if}
     </div>
 </div>
+
+<svelte:body on:click={handleOutsideClick} on:keydown={handleEscapeKey} />

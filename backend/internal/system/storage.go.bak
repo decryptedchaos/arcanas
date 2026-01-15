@@ -8,7 +8,6 @@ package system
 
 import (
 	"bufio"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"strconv"
@@ -18,19 +17,6 @@ import (
 
 	"arcanas/internal/models"
 )
-
-// lsblk JSON structures
-type LsblkDevice struct {
-	Name       string        `json:"name"`
-	Size       int64         `json:"size"`
-	Type       string        `json:"type"`
-	Mountpoint string        `json:"mountpoint"`
-	Children   []LsblkDevice `json:"children"`
-}
-
-type LsblkOutput struct {
-	Blockdevices []LsblkDevice `json:"blockdevices"`
-}
 
 var (
 	lastDiskStats struct {
@@ -57,105 +43,62 @@ func GetStorageStats() (models.StorageStats, error) {
 func getDiskStats() ([]models.DiskHealth, error) {
 	var disks []models.DiskHealth
 
-	// Get all block devices as JSON for reliable parsing
-	cmd := exec.Command("lsblk", "-J", "-b", "-o", "NAME,SIZE,TYPE,MOUNTPOINT")
+	// Get all block devices (including unformatted)
+	cmd := exec.Command("lsblk", "-b", "-o", "NAME,SIZE,TYPE,MOUNTPOINT")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse JSON output
-	var lsblkData LsblkOutput
-	if err := json.Unmarshal(output, &lsblkData); err != nil {
-		return nil, err
-	}
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines[1:] { // Skip header
+		fields := strings.Fields(line)
+		if len(fields) >= 3 {
+			name := fields[0]
+			size, _ := strconv.ParseInt(fields[1], 10, 64)
+			deviceType := fields[2]
+			mountpoint := ""
+			if len(fields) > 3 {
+				mountpoint = fields[3]
+			}
 
-	// Process each device (including nested devices like md members)
-	for _, device := range lsblkData.Blockdevices {
-		disks = processDevice(device, disks)
+			// Skip virtual devices and partitions for now
+			if deviceType != "disk" {
+				continue
+			}
+
+			device := "/dev/" + name
+			used := int64(0)
+
+			// Get used space if mounted
+			if mountpoint != "" {
+				cmd := exec.Command("df", "-B", "1", mountpoint)
+				dfOutput, _ := cmd.Output()
+				dfLines := strings.Split(string(dfOutput), "\n")
+				if len(dfLines) > 1 {
+					dfFields := strings.Fields(dfLines[1])
+					if len(dfFields) >= 3 {
+						used, _ = strconv.ParseInt(dfFields[2], 10, 64)
+					}
+				}
+			}
+
+			model := getDiskModelFromPath(device)
+			temp, _ := getDiskTemperature(device)
+
+			disks = append(disks, models.DiskHealth{
+				Device:      device,
+				Model:       model,
+				Size:        size,
+				Used:        used,
+				Temperature: temp,
+				Health:      95,
+				SmartStatus: "healthy",
+			})
+		}
 	}
 
 	return disks, nil
-}
-
-func processDevice(device LsblkDevice, disks []models.DiskHealth) []models.DiskHealth {
-	// Include physical disks and RAID arrays (md devices, raid0, raid1, raid5, raid6, raid10)
-	// Skip virtual devices, partitions, and LVM logical volumes
-	isPhysicalDisk := device.Type == "disk"
-	isRAIDArray := device.Type == "md" || strings.HasPrefix(device.Type, "raid")
-	isLoopDevice := strings.HasPrefix(device.Name, "loop")
-	isLVM := strings.HasPrefix(device.Name, "dm-")
-
-	if !isPhysicalDisk && !isRAIDArray {
-		// Still process children (e.g., partitions)
-		for _, child := range device.Children {
-			disks = processDevice(child, disks)
-		}
-		return disks
-	}
-
-	// Skip loop devices and LVM
-	if isLoopDevice || isLVM {
-		return disks
-	}
-
-	devicePath := "/dev/" + device.Name
-
-	// Check for duplicates (RAID arrays appear as children of multiple member disks)
-	for _, d := range disks {
-		if d.Device == devicePath {
-			// Already added, just process children
-			for _, child := range device.Children {
-				disks = processDevice(child, disks)
-			}
-			return disks
-		}
-	}
-
-	used := int64(0)
-
-	// Get used space if mounted
-	if device.Mountpoint != "" {
-		cmd := exec.Command("df", "-B", "1", device.Mountpoint)
-		dfOutput, _ := cmd.Output()
-		dfLines := strings.Split(string(dfOutput), "\n")
-		if len(dfLines) > 1 {
-			dfFields := strings.Fields(dfLines[1])
-			if len(dfFields) >= 3 {
-				used, _ = strconv.ParseInt(dfFields[2], 10, 64)
-			}
-		}
-	}
-
-	var model string
-	var temp float64
-
-	if isRAIDArray {
-		// For RAID arrays, use a descriptive model name
-		model = "RAID Array (" + device.Type + ")"
-		// RAID devices don't have SMART temperature
-		temp = 0
-	} else {
-		model = getDiskModelFromPath(devicePath)
-		temp, _ = getDiskTemperature(devicePath)
-	}
-
-	disks = append(disks, models.DiskHealth{
-		Device:      devicePath,
-		Model:       model,
-		Size:        device.Size,
-		Used:        used,
-		Temperature: temp,
-		Health:      95,
-		SmartStatus: "healthy",
-	})
-
-	// Process children (e.g., partitions)
-	for _, child := range device.Children {
-		disks = processDevice(child, disks)
-	}
-
-	return disks
 }
 
 func getDiskModelFromPath(device string) string {
