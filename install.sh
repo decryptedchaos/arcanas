@@ -38,7 +38,7 @@ print_error() {
 }
 
 # Check if running as root
-if [[ $EUID -ne 0 ]]; then
+if [ "$(id -u)" -ne 0 ]; then
    print_error "This script must be run as root (use sudo)"
    exit 1
 fi
@@ -47,10 +47,10 @@ fi
 # Force VERSION to default value first
 VERSION="latest"
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
         --version)
-            if [[ -n "$2" && "$2" != --* ]]; then
+            if [ -n "$2" ]; then
                 VERSION="$2"
                 shift 2
             else
@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
             fi
             ;;
         --repo)
-            if [[ -n "$2" && "$2" != --* ]]; then
+            if [ -n "$2" ]; then
                 REPO_OWNER="$2"
                 shift 2
             else
@@ -90,11 +90,22 @@ print_status "Repository: $REPO_OWNER/$REPO_NAME"
 print_status "Version: $VERSION"
 
 # Validate version format
-if [[ "$VERSION" != "latest" && ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    print_error "Invalid version format: $VERSION"
-    print_error "Version must be 'latest' or in format v1.0.0"
-    exit 1
-fi
+case "$VERSION" in
+    latest)
+        # Valid
+        ;;
+    v[0-9].[0-9].[0-9]*)
+        # Valid version format
+        ;;
+    v[0-9].[0-9].[0-9]*)
+        # Valid version format with patch
+        ;;
+    *)
+        print_error "Invalid version format: $VERSION"
+        print_error "Version must be 'latest' or in format v1.0.0"
+        exit 1
+        ;;
+esac
 
 # Function to detect OS
 detect_os() {
@@ -230,12 +241,17 @@ download_release() {
     fi
     
     print_status "Downloading from: $DOWNLOAD_URL"
-    
-    # Validate URL format
-    if [[ ! "$DOWNLOAD_URL" =~ ^https://github\.com/.*/releases/download/.*\.tar\.gz$ ]]; then
-        print_error "Invalid download URL format: $DOWNLOAD_URL"
-        exit 1
-    fi
+
+    # Validate URL format (POSIX-compatible)
+    case "$DOWNLOAD_URL" in
+        *github.com*/releases/download/*.tar.gz)
+            # Valid URL format
+            ;;
+        *)
+            print_error "Invalid download URL format: $DOWNLOAD_URL"
+            exit 1
+            ;;
+    esac
     
     wget -q --show-progress "$DOWNLOAD_URL" -O arcanas.tar.gz
     
@@ -249,7 +265,8 @@ download_release() {
 
 # Function to create service user
 create_service_user() {
-    if id "$SERVICE_USER" &>/dev/null; then
+    # Check if user exists by looking in /etc/passwd directly
+    if grep -q "^${SERVICE_USER}:" /etc/passwd 2>/dev/null; then
         print_status "Service user $SERVICE_USER already exists"
     else
         print_status "Creating service user: $SERVICE_USER"
