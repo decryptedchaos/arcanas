@@ -10,7 +10,8 @@
 
 #### BE ADVISED, THIS IS UNDER HEAVY DEVELOPMENT, WE WOULD WELCOME ANY FIXES YOU WANT TO CONTRIBUTE 
 
-<img width="1920" height="904" alt="Image" src="https://github.com/user-attachments/assets/45520c7e-b3c3-4563-913a-d606729c6057" />
+<img width="1864" height="942" alt="image" src="https://github.com/user-attachments/assets/bb4eb1f2-7e7f-4334-a95f-93786cfe698d" />
+
 
 ## ✨ Features
 
