@@ -44,11 +44,13 @@ sudo ./arcanas setup
 
 ### 📦 Production Installation
 
-```bash
-# Install Arcanas (downloads latest release and sets up systemd service)
-curl -fsSL https://raw.githubusercontent.com/decryptedchaos/arcanas/master/install.sh | sudo bash
 
-# Install specific version
+### Install Latest 
+```bash
+curl -fsSL https://raw.githubusercontent.com/decryptedchaos/arcanas/master/install.sh | sudo bash
+```
+### Install specific version
+```bash
 curl -fsSL https://raw.githubusercontent.com/decryptedchaos/arcanas/master/install.sh | sudo bash -s -- --version v1.0.0
 ```
 
