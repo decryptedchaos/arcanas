@@ -46,14 +46,14 @@ type SwapInfo struct {
 }
 
 type NetworkStats struct {
-	Interfaces []NetworkInterface `json:"interfaces"`
-	TotalRx    int64              `json:"total_rx"`
-	TotalTx    int64              `json:"total_tx"`
-	RxRate     int64              `json:"rx_rate"`
-	TxRate     int64              `json:"tx_rate"`
+	Interfaces []NetworkInterfaceStats `json:"interfaces"`
+	TotalRx    int64                   `json:"total_rx"`
+	TotalTx    int64                   `json:"total_tx"`
+	RxRate     int64                   `json:"rx_rate"`
+	TxRate     int64                   `json:"tx_rate"`
 }
 
-type NetworkInterface struct {
+type NetworkInterfaceStats struct {
 	Name    string `json:"name"`
 	Status  string `json:"status"`
 	Speed   string `json:"speed"`

@@ -18,6 +18,7 @@ import (
 
 	"arcanas/internal/models"
 	"arcanas/internal/system"
+	"arcanas/internal/utils"
 )
 
 type MountInfo struct {
@@ -169,17 +170,16 @@ func GetDiskStats(w http.ResponseWriter, r *http.Request) {
 func GetSmartStatus(w http.ResponseWriter, r *http.Request) {
 	disk := r.URL.Query().Get("disk")
 
-	// TODO: Implement actual SMART data reading using smartctl
-	// For now, return mock data but log the requested disk
-	log.Printf("SMART status requested for disk: %s", disk)
+	if disk == "" {
+		http.Error(w, "Disk parameter is required", http.StatusBadRequest)
+		return
+	}
 
-	smart := models.SmartInfo{
-		Status:      "healthy",
-		Health:      95,
-		Temperature: 42,
-		PassedTests: 150,
-		FailedTests: 0,
-		LastTest:    time.Now().Add(-24 * time.Hour),
+	smart, err := getSmartFullInfo(disk)
+	if err != nil {
+		log.Printf("Error getting SMART status for %s: %v", disk, err)
+		http.Error(w, "Failed to get SMART status", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -187,6 +187,638 @@ func GetSmartStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
 		return
 	}
+}
+
+// GetAllSmartStatus returns SMART info for all disks
+func GetAllSmartStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get list of all disks
+	disks, err := getDiskList()
+	if err != nil {
+		log.Printf("Error getting disk list: %v", err)
+		http.Error(w, "Failed to get disk list", http.StatusInternalServerError)
+		return
+	}
+
+	// Get SMART info for each disk
+	var results []models.SmartFullInfo
+	for _, disk := range disks {
+		smart, err := getSmartFullInfo(disk)
+		if err != nil {
+			log.Printf("Error getting SMART for %s: %v", disk, err)
+			continue
+		}
+		results = append(results, smart)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(results); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+// getSmartFullInfo gets complete SMART information for a disk
+func getSmartFullInfo(disk string) (models.SmartFullInfo, error) {
+	smart := models.SmartFullInfo{
+		Device: disk,
+	}
+
+	// Get device info (model, serial, firmware)
+	info, err := getSmartInfo(disk)
+	if err == nil {
+		smart.Model = info.model
+		smart.Serial = info.serial
+		smart.Firmware = info.firmware
+	}
+
+	// Get SMART health
+	health, err := getSmartHealth(disk)
+	if err == nil {
+		smart.Health = health.percentage
+		smart.Status = health.status
+		smart.Enabled = health.enabled
+	}
+
+	// Get temperature
+	temp, err := getDiskTemperature(disk)
+	if err == nil && temp > 0 {
+		smart.Temperature = temp
+	}
+
+	// Get power on hours and cycles
+	powerInfo, err := getSmartPowerInfo(disk)
+	if err == nil {
+		smart.PowerOnHours = powerInfo.hours
+		smart.PowerCycles = powerInfo.cycles
+	}
+
+	// Get SMART attributes
+	attrs, err := getSmartAttributes(disk)
+	if err == nil {
+		smart.Attributes = attrs
+	}
+
+	// Get self-test log
+	tests, err := getSmartSelfTests(disk)
+	if err == nil {
+		smart.SelfTests = tests
+		smart.PassedTests = countPassedTests(tests)
+		smart.FailedTests = countFailedTests(tests)
+	}
+
+	// Get error log
+	errors, err := getSmartErrors(disk)
+	if err == nil {
+		smart.Errors = errors
+	}
+
+	return smart, nil
+}
+
+// getSmartInfo gets device information from smartctl -i
+func getSmartInfo(disk string) (struct {
+	model    string
+	serial   string
+	firmware string
+}, error) {
+	cmd := exec.Command("smartctl", "-i", disk)
+	output, err := cmd.Output()
+	if err != nil {
+		return struct{ model, serial, firmware string }{}, err
+	}
+
+	info := struct {
+		model    string
+		serial   string
+		firmware string
+	}{}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Device Model:") {
+			info.model = strings.TrimSpace(strings.TrimPrefix(line, "Device Model:"))
+		} else if strings.HasPrefix(line, "Serial Number:") {
+			info.serial = strings.TrimSpace(strings.TrimPrefix(line, "Serial Number:"))
+		} else if strings.HasPrefix(line, "Firmware Version:") {
+			info.firmware = strings.TrimSpace(strings.TrimPrefix(line, "Firmware Version:"))
+		}
+	}
+
+	return info, nil
+}
+
+// getSmartHealth gets SMART health assessment from smartctl -H
+func getSmartHealth(disk string) (struct {
+	percentage int
+	status     string
+	enabled    bool
+}, error) {
+	cmd := exec.Command("smartctl", "-H", disk)
+	output, err := cmd.Output()
+	if err != nil {
+		return struct{ percentage int; status string; enabled bool }{}, err
+	}
+
+	result := struct {
+		percentage int
+		status     string
+		enabled    bool
+	}{}
+
+	// Parse overall health
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.Contains(line, "SMART overall-health self-assessment test result") {
+			if strings.Contains(line, "PASSED") {
+				result.status = "healthy"
+				result.percentage = 100
+			} else if strings.Contains(line, "FAILED") {
+				result.status = "failed"
+				result.percentage = 0
+			}
+		}
+	}
+
+	// Check if SMART is enabled
+	cmd = exec.Command("smartctl", "-c", disk)
+	output, err = cmd.Output()
+	if err == nil {
+		lines = strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "SMART support is:") {
+				result.enabled = strings.Contains(line, "Enabled")
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// getSmartPowerInfo gets power on hours and cycles from smartctl
+func getSmartPowerInfo(disk string) (struct {
+	hours  int
+	cycles int
+}, error) {
+	cmd := exec.Command("smartctl", "-A", disk)
+	output, err := cmd.Output()
+	if err != nil {
+		return struct{ hours int; cycles int }{}, err
+	}
+
+	result := struct{ hours int; cycles int }{}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Power_On_Hours") {
+			parts := strings.Fields(line)
+			if len(parts) >= 10 {
+				if val, err := strconv.ParseInt(strings.Trim(parts[9], "-"), 10, 64); err == nil {
+					result.hours = int(val)
+				}
+			}
+		} else if strings.Contains(line, "Power_Cycle_Count") {
+			parts := strings.Fields(line)
+			if len(parts) >= 10 {
+				if val, err := strconv.ParseInt(strings.Trim(parts[9], "-"), 10, 64); err == nil {
+					result.cycles = int(val)
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// getDiskTemperature gets the current disk temperature from smartctl
+func getDiskTemperature(disk string) (int, error) {
+	cmd := exec.Command("smartctl", "-A", disk)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		// Look for temperature attribute (usually ID 194 or 190)
+		if strings.Contains(line, "Temperature") || strings.Contains(line, "Airflow_Temperature") {
+			parts := strings.Fields(line)
+			if len(parts) >= 10 {
+				// Try to parse the raw value (column 9) or normalized value (column 3)
+				if val, err := strconv.ParseInt(strings.Trim(parts[9], "-"), 10, 64); err == nil && val > 0 {
+					return int(val), nil
+				}
+				if val, err := strconv.ParseInt(parts[3], 10, 64); err == nil && val > 0 {
+					return int(val), nil
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("temperature not found")
+}
+
+// getSmartAttributes parses SMART attributes from smartctl -A
+func getSmartAttributes(disk string) ([]models.SmartAttribute, error) {
+	cmd := exec.Command("smartctl", "-A", disk)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var attributes []models.SmartAttribute
+	lines := strings.Split(string(output), "\n")
+
+	inAttributesSection := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Start of attributes section
+		if strings.HasPrefix(line, "ID# ATTRIBUTE_NAME") {
+			inAttributesSection = true
+			continue
+		}
+
+		// Vendor-specific attributes section starts after an empty line
+		if inAttributesSection && line == "" {
+			continue
+		}
+
+		if !inAttributesSection || line == "" || strings.HasPrefix(line, "===") {
+			if strings.HasPrefix(line, "===") {
+				break
+			}
+			continue
+		}
+
+		// Parse attribute line
+		// Format: ID# ATTRIBUTE_NAME FLAGS VALUE WORST THRESH FAILING_RAW_VALUE
+		parts := strings.Fields(line)
+		if len(parts) >= 10 {
+			attr := models.SmartAttribute{}
+
+			// Parse ID
+			if strings.Contains(parts[0], "#") {
+				idStr := strings.TrimSuffix(parts[0], "#")
+				if id, err := strconv.Atoi(idStr); err == nil {
+					attr.ID = id
+				}
+			}
+
+			attr.Name = parts[1]
+			attr.Flag = parts[2]
+
+			if value, err := strconv.Atoi(parts[3]); err == nil {
+				attr.Value = value
+			}
+			if worst, err := strconv.Atoi(parts[4]); err == nil {
+				attr.Worst = worst
+			}
+			if thresh, err := strconv.Atoi(parts[5]); err == nil {
+				attr.Threshold = thresh
+			}
+
+			// Parse raw value (format: VALUE (raw))
+			rawStr := parts[9]
+			if strings.HasPrefix(rawStr, "-") {
+				attr.RawValue, _ = strconv.ParseInt(strings.TrimPrefix(rawStr, "-"), 10, 64)
+			} else {
+				// Try to extract the raw value from parentheses
+				startIdx := strings.LastIndex(rawStr, "(")
+				endIdx := strings.LastIndex(rawStr, ")")
+				if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
+					rawVal := rawStr[startIdx+1 : endIdx]
+					attr.RawValue, _ = strconv.ParseInt(rawVal, 10, 64)
+				}
+			}
+
+			// Check if failed
+			attr.Failed = strings.Contains(parts[6], "FAILING")
+
+			attributes = append(attributes, attr)
+		}
+	}
+
+	return attributes, nil
+}
+
+// getSmartSelfTests gets self-test log from smartctl -l selftest
+func getSmartSelfTests(disk string) ([]models.SmartTestEntry, error) {
+	cmd := exec.Command("smartctl", "-l", "selftest", disk)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var tests []models.SmartTestEntry
+	lines := strings.Split(string(output), "\n")
+
+	inTestSection := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if strings.HasPrefix(line, "SMART Self-test log structure") {
+			inTestSection = true
+			continue
+		}
+
+		if !inTestSection {
+			continue
+		}
+
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Parse test entry
+		// Format: # Num Test_Description Status Remaining Lifetime(hours) LBA_of_first_error
+		parts := strings.Fields(line)
+		if len(parts) >= 6 {
+			test := models.SmartTestEntry{}
+
+			if testNum, err := strconv.Atoi(strings.TrimPrefix(parts[0], "#")); err == nil {
+				test.TestNum = testNum
+			}
+			test.Type = strings.Join(parts[1:4], " ")
+			test.Status = parts[4]
+
+			// Handle case where remaining might be empty
+			if len(parts) >= 6 {
+				// Try to parse remaining percentage
+				if strings.Contains(parts[5], "%") {
+					test.Remaining, _ = strconv.Atoi(strings.TrimSuffix(parts[5], "%"))
+				}
+			}
+
+			// Parse LBA if present
+			for i := 6; i < len(parts); i++ {
+				if parts[i] != "-" {
+					if lba, err := strconv.ParseInt(parts[i], 10, 64); err == nil {
+						test.LBA = lba
+					}
+				}
+			}
+
+			tests = append(tests, test)
+		}
+	}
+
+	return tests, nil
+}
+
+// getSmartErrors gets error log from smartctl -l error
+func getSmartErrors(disk string) ([]models.SmartError, error) {
+	cmd := exec.Command("smartctl", "-l", "error", disk)
+	output, err := cmd.Output()
+	if err != nil {
+		// No errors is OK
+		return []models.SmartError{}, nil
+	}
+
+	var errors []models.SmartError
+	lines := strings.Split(string(output), "\n")
+
+	inErrorSection := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if strings.HasPrefix(line, "SMART Error Log structure") {
+			inErrorSection = true
+			continue
+		}
+
+		if !inErrorSection {
+			continue
+		}
+
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Parse error entry
+		// Simplified parsing for common format
+		parts := strings.Fields(line)
+		if len(parts) >= 7 {
+			smartErr := models.SmartError{}
+
+			if errNum, parseErr := strconv.Atoi(strings.TrimPrefix(parts[0], "#")); parseErr == nil {
+				smartErr.ErrorNum = errNum
+			}
+			smartErr.Type = parts[1]
+			smartErr.State = parts[3]
+
+			// Try to parse LBA if present
+			for i := 4; i < len(parts); i++ {
+				if parts[i] != "-" {
+					if lba, parseErr := strconv.ParseInt(parts[i], 10, 64); parseErr == nil {
+						smartErr.LBA = lba
+					}
+					break
+				}
+			}
+
+			errors = append(errors, smartErr)
+		}
+	}
+
+	return errors, nil
+}
+
+// countPassedTests counts passed self-tests
+func countPassedTests(tests []models.SmartTestEntry) int {
+	count := 0
+	for _, test := range tests {
+		if strings.Contains(strings.ToLower(test.Status), "completed") ||
+		   strings.Contains(strings.ToLower(test.Status), "passed") {
+			count++
+		}
+	}
+	return count
+}
+
+// countFailedTests counts failed self-tests
+func countFailedTests(tests []models.SmartTestEntry) int {
+	count := 0
+	for _, test := range tests {
+		if strings.Contains(strings.ToLower(test.Status), "failed") ||
+		   strings.Contains(strings.ToLower(test.Status), "error") {
+			count++
+		}
+	}
+	return count
+}
+
+// getDiskList returns a list of all disk devices
+func getDiskList() ([]string, error) {
+	cmd := exec.Command("lsblk", "-d", "-n", "-o", "NAME")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var disks []string
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "NAME") {
+			continue
+		}
+		// Only include actual disks (sd*, nvme*, etc.)
+		if strings.HasPrefix(line, "sd") || strings.HasPrefix(line, "nvme") {
+			disks = append(disks, "/dev/"+line)
+		}
+	}
+
+	return disks, nil
+}
+
+// RunSmartTest runs a SMART self-test on a disk
+func RunSmartTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Disk     string `json:"disk"`
+		TestType string `json:"test_type"` // short, long, conveyance
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Disk == "" {
+		http.Error(w, "Disk is required", http.StatusBadRequest)
+		return
+	}
+
+	// Map test type to smartctl argument
+	var testArg string
+	switch req.TestType {
+	case "short":
+		testArg = "-t short"
+	case "long":
+		testArg = "-t long"
+	case "conveyance":
+		testArg = "-t conveyance"
+	case "offline":
+		testArg = "-t offline"
+	default:
+		http.Error(w, "Invalid test type", http.StatusBadRequest)
+		return
+	}
+
+	// Run the test using SudoCommand
+	utils.SudoCommand("smartctl", testArg, req.Disk)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "test_started",
+		"disk":     req.Disk,
+		"testType": req.TestType,
+	})
+}
+
+// GetSmartAttributes returns detailed SMART attributes for a disk
+func GetSmartAttributes(w http.ResponseWriter, r *http.Request) {
+	disk := r.URL.Query().Get("disk")
+	if disk == "" {
+		http.Error(w, "Disk parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	attrs, err := getSmartAttributes(disk)
+	if err != nil {
+		log.Printf("Error getting SMART attributes for %s: %v", disk, err)
+		http.Error(w, "Failed to get SMART attributes", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(attrs); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// GetSmartErrors returns error log for a disk
+func GetSmartErrors(w http.ResponseWriter, r *http.Request) {
+	disk := r.URL.Query().Get("disk")
+	if disk == "" {
+		http.Error(w, "Disk parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	errors, err := getSmartErrors(disk)
+	if err != nil {
+		log.Printf("Error getting SMART errors for %s: %v", disk, err)
+		http.Error(w, "Failed to get error log", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(errors); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// SetSmartSetting modifies SMART settings for a disk
+func SetSmartSetting(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Disk   string `json:"disk"`
+		Setting string `json:"setting"` // enable, disable, offline_on, offline_off
+		Value  string `json:"value"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Disk == "" {
+		http.Error(w, "Disk is required", http.StatusBadRequest)
+		return
+	}
+
+	var args []string
+	switch req.Setting {
+	case "enable":
+		args = []string{"-s", "on", req.Disk}
+	case "disable":
+		args = []string{"-s", "off", req.Disk}
+	case "offline_on":
+		args = []string{"-o", "on", req.Disk}
+	case "offline_off":
+		args = []string{"-o", "off", req.Disk}
+	default:
+		http.Error(w, "Invalid setting", http.StatusBadRequest)
+		return
+	}
+
+	// Apply SMART setting
+	utils.SudoCommand("smartctl", args...)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "setting_applied",
+		"disk":     req.Disk,
+		"setting":  req.Setting,
+		"value":    req.Value,
+	})
 }
 
 func GetPartitions(w http.ResponseWriter, r *http.Request) {

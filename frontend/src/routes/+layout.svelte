@@ -7,10 +7,24 @@
 <script>
   import Sidebar from "$lib/components/Sidebar.svelte";
   import { onMount } from "svelte";
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
+  import { auth } from "$lib/stores/auth.js";
   import "../app.css";
 
   let sidebarOpen = true;
-  let darkMode = false;
+  // Initialize dark mode IMMEDIATELY from localStorage, not in onMount
+  // This prevents flash by having correct value on first render
+  const savedDarkMode = typeof window !== 'undefined' ? localStorage.getItem("darkMode") : null;
+  let darkMode = savedDarkMode === null ? true : savedDarkMode === "true";
+
+  // Save default preference if none exists
+  if (typeof window !== 'undefined' && savedDarkMode === null) {
+    localStorage.setItem("darkMode", "true");
+  }
+
+  // Public routes that don't require authentication
+  const publicRoutes = ["/login"];
 
   $: darkModeClass = darkMode ? "dark" : "";
 
@@ -24,7 +38,26 @@
     localStorage.setItem("sidebarOpen", sidebarOpen.toString());
   }
 
-  onMount(() => {
+  onMount(async () => {
+    // Validate session on mount
+    await auth.validate();
+
+    // Check if route requires authentication
+    const currentPath = $page.url.pathname;
+    const isPublicRoute = publicRoutes.includes(currentPath);
+
+    // Redirect to login if not authenticated and not on public route
+    if (!$auth.isAuthenticated && !isPublicRoute) {
+      goto('/login');
+      return;
+    }
+
+    // Redirect to dashboard if already authenticated and on login page
+    if ($auth.isAuthenticated && currentPath === '/login') {
+      goto('/');
+      return;
+    }
+
     // Check for saved sidebar preference
     const savedSidebarState = localStorage.getItem("sidebarOpen");
     if (savedSidebarState !== null) {
@@ -36,40 +69,8 @@
       }
     }
 
-    // Check for saved dark mode preference or system preference
-    const savedDarkMode = localStorage.getItem("darkMode");
-    if (savedDarkMode !== null) {
-      darkMode = savedDarkMode === "true";
-    } else {
-      darkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }
-
-    // Set initial dark mode class
-    if (darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    // Dark mode is now initialized at component level, not here
   });
-
-  function darkModeAction(node, darkMode) {
-    const update = (newDarkMode) => {
-      if (newDarkMode) {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-    };
-
-    update(darkMode);
-
-    return {
-      update(newDarkMode) {
-        update(newDarkMode);
-      },
-      destroy() {},
-    };
-  }
 
   function toggleDarkMode() {
     darkMode = !darkMode;
@@ -163,6 +164,34 @@
                 class="w-2 h-2 bg-green-500 rounded-full animate-pulse"
               ></div>
               <span>System Online</span>
+            </div>
+
+            <!-- User Menu -->
+            <div class="flex items-center space-x-3">
+              <span
+                class="text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                {$auth.username}
+              </span>
+              <button
+                on:click={async () => await auth.logout()}
+                class="btn btn-secondary text-xs"
+                title="Logout"
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  />
+                </svg>
+              </button>
             </div>
 
             <div class="relative">

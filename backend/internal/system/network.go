@@ -85,14 +85,14 @@ func getNetworkRates(currentRx, currentTx int64) (int64, int64) {
 	return rxRate, txRate
 }
 
-func getNetworkInterfaces() ([]models.NetworkInterface, error) {
+func getNetworkInterfaces() ([]models.NetworkInterfaceStats, error) {
 	file, err := os.Open("/proc/net/dev")
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var interfaces []models.NetworkInterface
+	var interfaces []models.NetworkInterfaceStats
 	scanner := bufio.NewScanner(file)
 
 	// Skip header lines
@@ -130,7 +130,7 @@ func getNetworkInterfaces() ([]models.NetworkInterface, error) {
 			// Get speed
 			speed := getInterfaceSpeed(name)
 
-			interfaces = append(interfaces, models.NetworkInterface{
+			interfaces = append(interfaces, models.NetworkInterfaceStats{
 				Name:    name,
 				Status:  status,
 				Speed:   speed,

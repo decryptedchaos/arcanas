@@ -3,12 +3,29 @@
 	<head>
 		<meta charset="utf-8" />
 		<title>Arcanas - Storage Management</title>
-		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="Arcanas - Modern storage management dashboard" />
+
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover">
+	<body data-sveltekit-preload-data="hover" style="background-color: #09090b; margin: 0;">
+		<!-- Inline script to set theme IMMEDIATELY - runs before any rendering -->
+		<script>
+			(function() {
+				const savedDarkMode = localStorage.getItem('darkMode');
+				const isDark = savedDarkMode === null ? true : savedDarkMode === 'true';
+				if (!isDark) {
+					document.documentElement.classList.remove('dark');
+					document.body.style.backgroundColor = '#f9fafb';
+				} else {
+					document.documentElement.classList.add('dark');
+					document.body.style.backgroundColor = '#09090b';
+				}
+			})();
+		</script>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>

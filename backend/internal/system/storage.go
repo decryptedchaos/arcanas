@@ -214,7 +214,36 @@ func getDiskTemperature(device string) (float64, error) {
 	return 0, nil
 }
 
+// getRAIDMemberDisks returns a list of physical disk devices that are RAID members
+// by parsing /proc/mdstat
+func getRAIDMemberDisks() (map[string]bool, error) {
+	raidMembers := make(map[string]bool)
+
+	data, err := os.ReadFile("/proc/mdstat")
+	if err != nil {
+		return raidMembers, err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		// Look for lines like: md0 : active raid1 sda[0] sdb[1]
+		if strings.Contains(line, " : active ") {
+			fields := strings.Fields(line)
+			for i, field := range fields {
+				if i > 2 && strings.HasPrefix(field, "sd") {
+					// Extract device name (remove [0], [1], etc.)
+					deviceName := strings.Split(field, "[")[0]
+					raidMembers[deviceName] = true
+				}
+			}
+		}
+	}
+
+	return raidMembers, nil
+}
+
 // GetDiskIORates reads real disk I/O statistics from /proc/diskstats and calculates rates
+// for physical disks only (excludes md devices to show actual hardware workload)
 func GetDiskIORates() (map[string]interface{}, error) {
 	file, err := os.Open("/proc/diskstats")
 	if err != nil {
@@ -237,7 +266,7 @@ func GetDiskIORates() (map[string]interface{}, error) {
 		fields := strings.Fields(line)
 		if len(fields) >= 14 {
 			// Skip partitions, virtual devices, and RAID arrays
-			// Only count physical disk I/O to avoid double-counting
+			// Only count physical disk I/O to show actual hardware workload
 			device := fields[2]
 			if strings.Contains(device, "loop") || strings.Contains(device, "ram") ||
 				strings.Contains(device, "dm-") || strings.Contains(device, "sr") ||
@@ -320,6 +349,116 @@ func GetDiskIORates() (map[string]interface{}, error) {
 			"timestamp":  now,
 		}, nil
 	}
+
+	return map[string]interface{}{
+		"read_rate":  readMBRate,
+		"write_rate": writeMBRate,
+		"read_iops":  readOpsRate,
+		"write_iops": writeOpsRate,
+		"timestamp":  now,
+	}, nil
+}
+
+// Separate tracking for array I/O rates
+var (
+	lastArrayStats struct {
+		readSectors  uint64
+		writeSectors uint64
+		readOps      uint64
+		writeOps     uint64
+		time         time.Time
+	}
+	arrayMutex sync.Mutex
+)
+
+// GetArrayIORates reads RAID array I/O statistics from /proc/diskstats and calculates rates
+// This shows actual data throughput (not double-counting RAID members)
+func GetArrayIORates() (map[string]interface{}, error) {
+	file, err := os.Open("/proc/diskstats")
+	if err != nil {
+		// Fallback to mock data if /proc/diskstats not available
+		return map[string]interface{}{
+			"read_rate":  0.0,
+			"write_rate": 0.0,
+			"read_iops":  0,
+			"write_iops": 0,
+			"timestamp":  time.Now(),
+		}, nil
+	}
+	defer file.Close()
+
+	var totalReadSectors, totalWriteSectors, totalReadOps, totalWriteOps uint64
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) >= 14 {
+			// Only count md (RAID array) devices for throughput
+			device := fields[2]
+			if !strings.HasPrefix(device, "md") {
+				continue
+			}
+
+			// Parse diskstats fields
+			readOps, _ := strconv.ParseUint(fields[3], 10, 64)
+			readSectors, _ := strconv.ParseUint(fields[5], 10, 64)
+			writeOps, _ := strconv.ParseUint(fields[7], 10, 64)
+			writeSectors, _ := strconv.ParseUint(fields[9], 10, 64)
+
+			totalReadOps += readOps
+			totalWriteOps += writeOps
+			totalReadSectors += readSectors
+			totalWriteSectors += writeSectors
+		}
+	}
+
+	arrayMutex.Lock()
+	defer arrayMutex.Unlock()
+
+	now := time.Now()
+
+	if lastArrayStats.time.IsZero() {
+		// First reading, just store values and return mock data
+		lastArrayStats.readSectors = totalReadSectors
+		lastArrayStats.writeSectors = totalWriteSectors
+		lastArrayStats.readOps = totalReadOps
+		lastArrayStats.writeOps = totalWriteOps
+		lastArrayStats.time = now
+
+		return map[string]interface{}{
+			"read_rate":  0.0,
+			"write_rate": 0.0,
+			"read_iops":  0,
+			"write_iops": 0,
+			"timestamp":  now,
+		}, nil
+	}
+
+	// Calculate time difference
+	timeDiff := now.Sub(lastArrayStats.time).Seconds()
+	if timeDiff <= 0 {
+		timeDiff = 1.0
+	}
+
+	// Calculate deltas
+	readSectorsDiff := totalReadSectors - lastArrayStats.readSectors
+	writeSectorsDiff := totalWriteSectors - lastArrayStats.writeSectors
+	readOpsDiff := totalReadOps - lastArrayStats.readOps
+	writeOpsDiff := totalWriteOps - lastArrayStats.writeOps
+
+	// Update last values
+	lastArrayStats.readSectors = totalReadSectors
+	lastArrayStats.writeSectors = totalWriteSectors
+	lastArrayStats.readOps = totalReadOps
+	lastArrayStats.writeOps = totalWriteOps
+	lastArrayStats.time = now
+
+	// Convert sectors to MB and calculate rates
+	readMBRate := float64(readSectorsDiff) * 512.0 / 1024.0 / 1024.0 / timeDiff
+	writeMBRate := float64(writeSectorsDiff) * 512.0 / 1024.0 / 1024.0 / timeDiff
+	readOpsRate := float64(readOpsDiff) / timeDiff
+	writeOpsRate := float64(writeOpsDiff) / timeDiff
 
 	return map[string]interface{}{
 		"read_rate":  readMBRate,

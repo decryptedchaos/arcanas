@@ -200,14 +200,14 @@ export const nfsAPI = {
   }),
 
   // Update NFS export
-  updateExport: (exportId, exportData) => apiRequest(`/nfs-exports/${exportId}`, {
+  updateExport: (exportPath, exportData) => apiRequest(`/nfs-exports/?path=${encodeURIComponent(exportPath)}`, {
     method: 'PUT',
     body: JSON.stringify(exportData),
   }),
 
   // Delete NFS export
   async deleteExport(exportPath) {
-    return apiRequest(`/nfs-exports?path=${encodeURIComponent(exportPath)}`, {
+    return apiRequest(`/nfs-exports/?path=${encodeURIComponent(exportPath)}`, {
       method: 'DELETE',
     });
   },
@@ -247,8 +247,11 @@ export const systemAPI = {
     body: JSON.stringify(options),
   }),
 
-  // Get disk I/O rates
+  // Get disk I/O rates (physical disks only, excludes md devices)
   getDiskIORates: () => apiRequest('/system/disk-io'),
+
+  // Get array I/O rates (RAID arrays, actual data throughput)
+  getArrayIORates: () => apiRequest('/system/array-io'),
 
   // Get network I/O rates
   getNetworkIORates: () => apiRequest('/system/network-io'),
@@ -474,6 +477,50 @@ export class RealtimeAPI {
 
 // Export a single instance for real-time updates
 export const realtimeAPI = new RealtimeAPI();
+
+// Authentication API
+export const authAPI = {
+  // Login with username and password
+  login: (username, password) => apiRequest('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  }),
+
+  // Logout (clears session cookie)
+  logout: () => apiRequest('/auth/logout', {
+    method: 'POST',
+  }),
+
+  // Validate current session
+  validate: () => apiRequest('/auth/validate'),
+};
+
+// SMART monitoring API
+export const smartAPI = {
+  // Get SMART status for all disks
+  getAllStatus: () => apiRequest('/smart/status'),
+
+  // Get SMART status for a specific disk
+  getStatus: (disk) => apiRequest(`/smart/status?disk=${disk}`),
+
+  // Run SMART self-test
+  runTest: (disk, testType) => apiRequest('/smart/test', {
+    method: 'POST',
+    body: JSON.stringify({ disk, test_type: testType }),
+  }),
+
+  // Get detailed SMART attributes for a disk
+  getAttributes: (disk) => apiRequest(`/smart/attributes?disk=${disk}`),
+
+  // Get error log for a disk
+  getErrors: (disk) => apiRequest(`/smart/errors?disk=${disk}`),
+
+  // Modify SMART settings
+  updateSetting: (disk, setting, value) => apiRequest('/smart/setting', {
+    method: 'PUT',
+    body: JSON.stringify({ disk, setting, value }),
+  }),
+};
 
 // Legacy function for backward compatibility
 export async function hello() {

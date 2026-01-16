@@ -17,19 +17,18 @@
   // History data for graphs - make them reactive
   let cpuHistory = [{ time: new Date(), value: 0 }];
   let diskIOHistory = [{ time: new Date(), read: 0, write: 0 }];
+  let arrayIOHistory = [{ time: new Date(), read: 0, write: 0 }];
   let networkIOHistory = [{ time: new Date(), rx: 0, tx: 0 }];
   const maxHistoryPoints = 60; // 5 minutes of data at 5-second intervals
 
   async function loadSystemStats() {
     try {
-      const [newStats, diskIORates, networkIORates] = await Promise.all([
+      const [newStats, diskIORates, arrayIORates, networkIORates] = await Promise.all([
         systemAPI.getOverview(),
         systemAPI.getDiskIORates(),
+        systemAPI.getArrayIORates(),
         systemAPI.getNetworkIORates(),
       ]);
-
-      console.log("Disk I/O data:", diskIORates);
-      console.log("Network I/O data:", networkIORates);
 
       // Update history arrays - use assignment for Svelte reactivity
       const now = new Date();
@@ -41,13 +40,23 @@
         },
       ];
 
-      // Use actual disk I/O rates from backend (convert MB/s to bytes/sec for consistent scaling)
+      // Physical disk I/O rates (excludes md devices)
       diskIOHistory = [
         ...diskIOHistory,
         {
           time: now,
           read: (diskIORates?.read_rate || 0) * 1024 * 1024, // Convert MB/s to bytes/sec
           write: (diskIORates?.write_rate || 0) * 1024 * 1024, // Convert MB/s to bytes/sec
+        },
+      ];
+
+      // Array I/O rates (RAID arrays, actual data throughput)
+      arrayIOHistory = [
+        ...arrayIOHistory,
+        {
+          time: now,
+          read: (arrayIORates?.read_rate || 0) * 1024 * 1024, // Convert MB/s to bytes/sec
+          write: (arrayIORates?.write_rate || 0) * 1024 * 1024, // Convert MB/s to bytes/sec
         },
       ];
 
@@ -92,6 +101,8 @@
         cpuHistory = cpuHistory.slice(-maxHistoryPoints);
       if (diskIOHistory.length > maxHistoryPoints)
         diskIOHistory = diskIOHistory.slice(-maxHistoryPoints);
+      if (arrayIOHistory.length > maxHistoryPoints)
+        arrayIOHistory = arrayIOHistory.slice(-maxHistoryPoints);
       if (networkIOHistory.length > maxHistoryPoints)
         networkIOHistory = networkIOHistory.slice(-maxHistoryPoints);
 
@@ -456,9 +467,9 @@
 
     <!-- Performance Graphs -->
     <div class="space-y-6">
-      <!-- Disk I/O Graph -->
+      <!-- Physical Disk I/O Graph -->
       <div class="card">
-        <div class="flex items-center space-x-4 mb-6">
+        <div class="flex items-center space-x-4 mb-1">
           <!-- Disk Icon with glow effect -->
           <div class="relative">
             <div class="absolute inset-0 bg-gradient-to-br from-green-400 to-emerald-500 rounded-xl blur opacity-25"></div>
@@ -468,9 +479,12 @@
               </svg>
             </div>
           </div>
-          <h3 class="text-xl font-bold text-gray-900 dark:text-white">
-            Disk I/O
-          </h3>
+          <div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+              Physical Disk I/O
+            </h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Hardware workload (excludes RAID arrays)</p>
+          </div>
         </div>
         <div class="space-y-4">
           <div class="flex justify-around">
@@ -579,9 +593,135 @@
         </div>
       </div>
 
+      <!-- Array Throughput Graph -->
+      <div class="card">
+        <div class="flex items-center space-x-4 mb-1">
+          <!-- RAID Icon with glow effect -->
+          <div class="relative">
+            <div class="absolute inset-0 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-xl blur opacity-25"></div>
+            <div class="relative icon-container bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40 rounded-xl flex items-center justify-center shadow-lg">
+              <svg class="icon-inner text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM13 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2z"/>
+              </svg>
+            </div>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+              Array Throughput
+            </h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Actual data transfer rate (RAID arrays)</p>
+          </div>
+        </div>
+        <div class="space-y-4">
+          <div class="flex justify-around">
+            <!-- Read Gauge -->
+            <Gauge
+              value={(arrayIOHistory[arrayIOHistory.length - 1]?.read ?? 0) / (1024 * 1024)}
+              max={calculateScale(arrayIOHistory, "all").max / (1024 * 1024)}
+              color="#6366F1"
+              label="Read"
+              valueFormatter={(v) => formatDataRate(v)}
+            />
+
+            <!-- Write Gauge -->
+            <Gauge
+              value={(arrayIOHistory[arrayIOHistory.length - 1]?.write ?? 0) / (1024 * 1024)}
+              max={calculateScale(arrayIOHistory, "all").max / (1024 * 1024)}
+              color="#A855F7"
+              label="Write"
+              valueFormatter={(v) => formatDataRate(v)}
+            />
+          </div>
+          <div
+            class="graph-height bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
+          >
+            <!-- Y-axis labels -->
+            <div
+              class="flex flex-col justify-between text-xs text-gray-500 mr-2 y-axis-width"
+            >
+              {#each calculateScale(arrayIOHistory, "all").steps as step}
+                <span>{(step / (1024 * 1024)).toFixed(1)} MB/s</span>
+              {/each}
+            </div>
+
+            <!-- Graph container -->
+            <div class="flex-1 relative">
+              <svg class="absolute inset-0 w-full h-full">
+                <!-- Grid lines -->
+                <g stroke="#6B7280" stroke-width="0.5">
+                  <!-- Horizontal grid lines -->
+                  <line x1="0%" y1="25%" x2="100%" y2="25%" />
+                  <line x1="0%" y1="50%" x2="100%" y2="50%" />
+                  <line x1="0%" y1="75%" x2="100%" y2="75%" />
+                  <!-- Vertical grid lines -->
+                  <line x1="25%" y1="0%" x2="25%" y2="100%" />
+                  <line x1="50%" y1="0%" x2="50%" y2="100%" />
+                  <line x1="75%" y1="0%" x2="75%" y2="100%" />
+                </g>
+
+                {#each arrayIOHistory as point, i}
+                  {@const arrayScale = calculateScale(arrayIOHistory, "all")}
+                  {@const xPos = (i / arrayIOHistory.length) * 100 + "%"}
+                  <circle
+                    cx={xPos}
+                    cy={100 - (point.read / arrayScale.max) * 100 + "%"}
+                    r="2"
+                    fill="#6366F1"
+                  />
+                  <circle
+                    cx={xPos}
+                    cy={100 - (point.write / arrayScale.max) * 100 + "%"}
+                    r="2"
+                    fill="#A855F7"
+                  />
+                  {#if i > 0}
+                    {@const prevXPos =
+                      ((i - 1) / arrayIOHistory.length) * 100 + "%"}
+                    <line
+                      x1={prevXPos}
+                      y1={100 -
+                        (arrayIOHistory[i - 1].read / arrayScale.max) * 100 +
+                        "%"}
+                      x2={xPos}
+                      y2={100 - (point.read / arrayScale.max) * 100 + "%"}
+                      stroke="#6366F1"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1={prevXPos}
+                      y1={100 -
+                        (arrayIOHistory[i - 1].write / arrayScale.max) * 100 +
+                        "%"}
+                      x2={xPos}
+                      y2={100 - (point.write / arrayScale.max) * 100 + "%"}
+                      stroke="#A855F7"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                      stroke-linecap="round"
+                    />
+                  {/if}
+                {/each}
+              </svg>
+            </div>
+          </div>
+          <div class="flex items-center space-x-4 text-xs">
+            <div class="flex items-center space-x-1">
+              <div class="w-3 h-3 bg-indigo-500 rounded-full"></div>
+              <span class="text-gray-600 dark:text-gray-300">Read</span>
+            </div>
+            <div class="flex items-center space-x-1">
+              <div class="w-3 h-3 bg-purple-500 rounded-full"></div>
+              <span class="text-gray-600 dark:text-gray-300">Write</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Network I/O Graph -->
       <div class="card">
-        <div class="flex items-center space-x-4 mb-6">
+        <div class="flex items-center space-x-4 mb-1">
           <!-- Network Icon with glow effect -->
           <div class="relative">
             <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-xl blur opacity-25"></div>
@@ -811,141 +951,84 @@
       </div>
     </div>
 
-    <!-- Storage Health -->
+    <!-- Storage Health Summary -->
     <div class="card">
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Storage Health
-      </h3>
-      <div class="space-y-4">
-        {#each systemStats?.storage?.disks || [] as disk, index}
-          <!-- RAID Array Separator -->
-          {#if disk && disk.type && disk.type === 'raid' && (index === 0 || !systemStats?.storage?.disks[index - 1] || systemStats?.storage?.disks[index - 1].type !== 'raid')}
-            <div class="relative my-6">
-              <div class="absolute inset-0 flex items-center">
-                <div class="w-full border-t-2 border-indigo-300 dark:border-indigo-700"></div>
-              </div>
-              <div class="relative flex justify-center">
-                <span class="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-sm font-semibold rounded-full border-2 border-indigo-300 dark:border-indigo-700 flex items-center space-x-2">
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/>
-                  </svg>
-                  <span>RAID Arrays</span>
-                </span>
-              </div>
-            </div>
-          {/if}
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+            Storage
+          </h3>
+          <p class="text-sm text-gray-600 dark:text-gray-300">
+            {systemStats?.storage?.disks?.length || 0} disk{(systemStats?.storage?.disks?.length || 0) !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <a
+          href="/storage"
+          class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+        >
+          View Details →
+        </a>
+      </div>
 
-          <!-- Disk Card -->
-          <div class="bg-white dark:bg-card shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-border {disk?.type === 'raid' ? 'ring-2 ring-indigo-200 dark:ring-indigo-800' : ''}">
-            <!-- Header Section -->
-            <div class="flex items-start justify-between mb-6">
-              <div class="flex items-center space-x-4">
-                <!-- Disk Icon with glow effect -->
-                <div class="relative">
-                  <div class="absolute inset-0 {disk?.type === 'raid'
-                    ? 'bg-gradient-to-br from-indigo-400 to-purple-500'
-                    : 'bg-gradient-to-br from-green-400 to-emerald-500'} rounded-xl blur opacity-25"></div>
-                  <div class="relative icon-container {disk?.type === 'raid'
-                    ? 'bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40'
-                    : 'bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40'} rounded-xl flex items-center justify-center shadow-lg">
-                    <svg class="icon-inner {disk?.type === 'raid' ? 'text-indigo-600 dark:text-indigo-400' : 'text-green-600 dark:text-green-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5h4M4 7h16"/>
-                    </svg>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 class="text-xl font-bold text-gray-900 dark:text-white">
-                    {disk?.device || "Unknown"}
-                  </h3>
-                  <div class="flex items-center flex-wrap gap-2 mt-1">
-                    <!-- Health Badge -->
-                    {#if disk?.smart_status}
-                      <span class="px-2 py-0.5 text-xs font-semibold rounded-full {disk?.smart_status === 'healthy'
-                        ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white'
-                        : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white'}">
-                        {disk.smart_status.toUpperCase()}
-                      </span>
-                    {/if}
-                    <!-- Temperature Badge -->
-                    {#if disk?.temperature}
-                      <span class="text-xs text-gray-500 dark:text-gray-400">
-                        {disk.temperature}°C
-                      </span>
-                    {/if}
-                    <!-- RAID Badge -->
-                    {#if disk?.type === 'raid'}
-                      <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
-                        RAID
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Disk Details -->
-            <div class="space-y-4">
-              <!-- Model -->
-              <div>
-                <p class="text-sm text-gray-600 dark:text-gray-300">
-                  {disk?.model || "Unknown Model"}
-                </p>
-              </div>
-
-              <!-- Capacity & Usage -->
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-                    Capacity
-                  </p>
-                  <p class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {formatBytes(disk?.size || 0)}
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-                    Used Space
-                  </p>
-                  <p class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {formatBytes(disk?.used || 0)}
-                  </p>
-                </div>
-              </div>
-
-              <!-- Usage Progress Bar -->
-              <div>
-                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  <span>Usage</span>
-                  <span>{disk?.size && disk.size > 0 ? ((disk?.used || 0) / disk.size * 100).toFixed(1) : 0}%</span>
-                </div>
-                <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-3">
-                  <div class="{disk?.type === 'raid' ? 'bg-indigo-600' : 'bg-gradient-to-r from-emerald-500 to-green-500'} h-3 rounded-full transition-all duration-500"
-                    style="width: {disk?.size && disk.size > 0 ? ((disk?.used || 0) / disk.size * 100) : 0}%"></div>
-                </div>
-              </div>
-
-              <!-- Health Status -->
-              {#if disk?.health !== undefined}
-                <div>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-                    Health Status
-                  </p>
-                  <div class="flex items-center space-x-2">
-                    <div class="w-2 h-2 rounded-full {disk.health >= 90
-                      ? 'bg-green-500'
-                      : disk.health >= 70
-                      ? 'bg-yellow-500'
-                      : 'bg-red-500'}"></div>
-                    <span class="text-sm font-medium text-gray-900 dark:text-white">
-                      {disk.health}% Good
-                    </span>
-                  </div>
-                </div>
-              {/if}
-            </div>
+      <div class="mt-4 space-y-4">
+        <!-- Overall Usage Bar -->
+        <div>
+          <div class="flex items-center justify-between text-sm mb-2">
+            <span class="text-gray-600 dark:text-gray-300">Total Usage</span>
+            <span class="font-medium text-gray-900 dark:text-white">
+              {systemStats?.storage?.disks && systemStats.storage.disks.length > 0
+                ? ((systemStats.storage.disks.reduce((sum, d) => sum + (d?.used || 0), 0) /
+                    systemStats.storage.disks.reduce((sum, d) => sum + (d?.size || 0), 0)) * 100).toFixed(1)
+                : 0}%
+            </span>
           </div>
-        {/each}
+          <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-4">
+            <div
+              class="bg-gradient-to-r from-blue-500 to-cyan-500 h-4 rounded-full transition-all duration-500"
+              style="width: {systemStats?.storage?.disks && systemStats.storage.disks.length > 0
+                ? ((systemStats.storage.disks.reduce((sum, d) => sum + (d?.used || 0), 0) /
+                    systemStats.storage.disks.reduce((sum, d) => sum + (d?.size || 0), 0)) * 100)
+                : 0}%"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Capacity Stats -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-gray-50 dark:bg-muted rounded-lg p-3">
+            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+              Total Capacity
+            </p>
+            <p class="text-lg font-semibold text-gray-900 dark:text-white">
+              {formatBytes(systemStats?.storage?.disks?.reduce((sum, d) => sum + (d?.size || 0), 0) || 0)}
+            </p>
+          </div>
+          <div class="bg-gray-50 dark:bg-muted rounded-lg p-3">
+            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+              Used Space
+            </p>
+            <p class="text-lg font-semibold text-gray-900 dark:text-white">
+              {formatBytes(systemStats?.storage?.disks?.reduce((sum, d) => sum + (d?.used || 0), 0) || 0)}
+            </p>
+          </div>
+        </div>
+
+        <!-- Overall Health Status -->
+        {#if systemStats?.storage?.disks && systemStats.storage.disks.length > 0}
+          {@const unhealthyCount = systemStats.storage.disks.filter(d => d?.smart_status && d.smart_status !== 'healthy').length}
+          <div class="flex items-center space-x-2">
+            <div class="w-2.5 h-2.5 rounded-full {unhealthyCount === 0
+              ? 'bg-green-500'
+              : unhealthyCount > 0
+              ? 'bg-yellow-500'
+              : 'bg-red-500'}"></div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">
+              {unhealthyCount === 0
+                ? 'All disks healthy'
+                : unhealthyCount + ' disk' + (unhealthyCount !== 1 ? 's' : '') + ' need attention'}
+            </span>
+          </div>
+        {/if}
       </div>
     </div>
   {/if}

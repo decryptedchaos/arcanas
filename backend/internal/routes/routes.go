@@ -16,6 +16,11 @@ import (
 func SetupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
+	// Authentication endpoints
+	mux.HandleFunc("/api/auth/login", handlers.Login)
+	mux.HandleFunc("/api/auth/logout", handlers.Logout)
+	mux.HandleFunc("/api/auth/validate", handlers.ValidateToken)
+
 	// Hello endpoint (existing)
 	mux.HandleFunc("/api/hello", handlers.Hello)
 
@@ -24,6 +29,13 @@ func SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/disk/smart", handlers.GetSmartStatus)
 	mux.HandleFunc("/api/disk/partitions", handlers.GetPartitions)
 	mux.HandleFunc("/api/disk/format", handlers.FormatDisk)
+
+	// SMART management endpoints
+	mux.HandleFunc("/api/smart/status", handlers.GetAllSmartStatus)
+	mux.HandleFunc("/api/smart/test", handlers.RunSmartTest)
+	mux.HandleFunc("/api/smart/attributes", handlers.GetSmartAttributes)
+	mux.HandleFunc("/api/smart/errors", handlers.GetSmartErrors)
+	mux.HandleFunc("/api/smart/setting", handlers.SetSmartSetting)
 
 	// RAID arrays endpoints
 	mux.HandleFunc("/api/raid-arrays", func(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +214,40 @@ func SetupRoutes() *http.ServeMux {
 
 	// I/O rate endpoints
 	mux.HandleFunc("/api/system/disk-io", handlers.GetDiskIORates)
+	mux.HandleFunc("/api/system/array-io", handlers.GetArrayIORates)
 	mux.HandleFunc("/api/system/network-io", handlers.GetNetworkIORates)
+
+	// Settings endpoints
+	mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetSystemSettings(w, r)
+		case http.MethodPut:
+			handlers.UpdateSystemSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/settings/network", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetNetworkConfig(w, r)
+		case http.MethodPut:
+			handlers.UpdateNetworkConfig(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/settings/timezone", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetTimezone(w, r)
+		case http.MethodPut:
+			handlers.UpdateTimezone(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	return mux
 }

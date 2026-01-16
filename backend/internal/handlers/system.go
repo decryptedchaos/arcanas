@@ -62,10 +62,21 @@ func GetSystemStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetDiskIORates(w http.ResponseWriter, r *http.Request) {
-	// Get real disk I/O rates from system
+	// Get physical disk I/O rates from system (excludes md devices)
 	ioRates, err := system.GetDiskIORates()
 	if err != nil {
 		handleError(w, err, "Failed to get disk I/O rates", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSONResponse(w, ioRates)
+}
+
+func GetArrayIORates(w http.ResponseWriter, r *http.Request) {
+	// Get RAID array I/O rates from system (actual data throughput)
+	ioRates, err := system.GetArrayIORates()
+	if err != nil {
+		handleError(w, err, "Failed to get array I/O rates", http.StatusInternalServerError)
 		return
 	}
 
