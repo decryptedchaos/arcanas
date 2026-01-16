@@ -565,7 +565,7 @@ func CleanupLegacyPool(poolName string) error {
 	if isMounted(legacyMountPoint) {
 		cmd := exec.Command("sudo", "umount", legacyMountPoint)
 		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to unmount legacy pool: %v, output: %s", legacyMountPoint, err, string(output))
+			return fmt.Errorf("failed to unmount legacy pool %s: %w, output: %s", legacyMountPoint, err, string(output))
 		}
 	}
 
@@ -580,7 +580,7 @@ func CleanupLegacyPool(poolName string) error {
 	if _, err := os.Stat(legacyMountPoint); err == nil {
 		cmd = exec.Command("sudo", "rm", "-rf", legacyMountPoint)
 		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to remove legacy pool directory: %v, output: %s", legacyMountPoint, err, string(output))
+			return fmt.Errorf("failed to remove legacy pool directory %s: %w, output: %s", legacyMountPoint, err, string(output))
 		}
 	}
 
