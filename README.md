@@ -42,18 +42,37 @@ sudo ./arcanas setup
 # API:      http://localhost:4000/api
 ```
 
-### 📦 Production Build
+### 📦 Production Installation
 
 ```bash
-# Forge the single binary
-./arcanas build
+# Install Arcanas (downloads latest release and sets up systemd service)
+curl -fsSL https://raw.githubusercontent.com/decryptedchaos/arcanas/main/install.sh | sudo sh
 
-# Deploy the artifact
-./arcanas
+# Install specific version
+curl -fsSL https://raw.githubusercontent.com/decryptedchaos/arcanas/main/install.sh | sudo sh -s -- --version v1.0.0
+```
 
-# Access your NAS
-# Frontend: http://localhost:4000
-# API:      http://localhost:4000/api
+The installer will:
+- Download the latest release for your platform
+- Install system dependencies (Samba, NFS, MergerFS, LVM, mdadm, etc.)
+- Create the `arcanas` service user
+- Set up systemd service
+- Configure firewall rules
+- Start the service automatically
+
+**Access Arcanas:**
+```
+Frontend: http://your-server-ip:4000
+API:      http://your-server-ip:4000/api
+```
+
+**Service Management:**
+```bash
+sudo systemctl start arcanas    # Start the service
+sudo systemctl stop arcanas     # Stop the service
+sudo systemctl restart arcanas  # Restart the service
+sudo systemctl status arcanas   # Check service status
+sudo journalctl -u arcanas -f   # View logs
 ```
 
 ---
@@ -90,32 +109,9 @@ arcanas/
 
 - **`API_PORT`** - Default: `4000`
 - **Storage** - Pools live in `/var/lib/arcanas/`
+- **Service** - Managed by systemd (auto-configured by installer)
 
-## 🐧 Production Deployment (systemd)
-
-Turn Arcanas into a proper system service:
-
-1. Create `/etc/systemd/system/arcanas.service`:
-```ini
-[Unit]
-Description=Arcanas NAS System 🐉
-After=network.target
-
-[Service]
-Type=simple
-User=arcanas
-ExecStart=/opt/arcanas/arcanas
-Restart=on-failure
-Environment="API_PORT=4000"
-
-[Install]
-WantedBy=multi-user.target
-```
-
-2. Enable & Start:
-```bash
-sudo systemctl enable --now arcanas
-```
+> **Note:** The installer automatically sets up the systemd service. If you need to manually configure it, the service file is located at `/etc/systemd/system/arcanas.service`.
 
 ## 🧪 Testing
 
