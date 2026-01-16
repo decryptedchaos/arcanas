@@ -93,7 +93,7 @@ arcanas/
 ## ⚙️ Configuration
 
 - **`API_PORT`** - Default: `4000`
-- **Storage** - Pools live in `/var/lib/arcanas/`
+- **Storage** - Pools live in `/srv/`
 - **Service** - Managed by systemd (auto-configured by installer)
 
 > **Note:** The installer automatically sets up the systemd service. If you need to manually configure it, the service file is located at `/etc/systemd/system/arcanas.service`.
