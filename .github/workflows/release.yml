@@ -55,6 +55,7 @@ jobs:
     - name: Build frontend
       run: |
         cd frontend
+        export APP_VERSION="v${{ steps.version.outputs.version }}"
         npm run build
 
     - name: Download Go modules

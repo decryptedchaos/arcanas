@@ -18,6 +18,9 @@
   let showSubmenuPopup = false;
   let popupPosition = { top: 0, left: 0 };
 
+  // Get version from build-time constant
+  const appVersion = __APP_VERSION__;
+
   // Helper functions for submenu management
   function handleExpandableClick(event, expandedState, toggleExpanded) {
     if (isCollapsed) {
@@ -127,7 +130,7 @@
             <p class="text-sm font-medium text-gray-900 dark:text-white">
               Arcanas Manager
             </p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">v1.0.0</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{appVersion}</p>
           </div>
         {/if}
       </div>

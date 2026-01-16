@@ -83,12 +83,6 @@
         }
     }
 
-    function getStatusColor(available) {
-        return available
-            ? "text-green-600 bg-green-100"
-            : "text-gray-600 dark:text-gray-300 bg-gray-100";
-    }
-
     async function toggleShare(share) {
         try {
             await sambaAPI.toggleShare(share.name);
@@ -207,30 +201,43 @@
     }
 </script>
 
-<div class="p-6">
-    <div class="mb-6">
-        <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            Samba Shares
-        </h1>
-        <p class="text-sm text-gray-600 dark:text-gray-300">
-            Manage SMB/CIFS file shares
-        </p>
-    </div>
-
-    <div class="flex justify-between items-center mb-6">
-        <button
-            on:click={loadShares}
-            class="btn btn-secondary"
-            disabled={loading}
-        >
-            Refresh
-        </button>
-        <button
-            on:click={() => (showCreateModal = true)}
-            class="btn btn-primary"
-        >
-            Create Share
-        </button>
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <!-- Samba Icon with glow effect -->
+            <div class="relative">
+                <div class="absolute inset-0 bg-gradient-to-br from-orange-400 to-amber-500 rounded-xl blur opacity-25"></div>
+                <div class="relative w-14 h-14 bg-gradient-to-br from-orange-100 to-amber-100 dark:from-orange-900/40 dark:to-amber-900/40 rounded-xl flex items-center justify-center shadow-lg">
+                    <svg class="w-7 h-7 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+                    </svg>
+                </div>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+                    Samba Shares
+                </h2>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                    Manage SMB/CIFS file shares
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button
+                on:click={loadShares}
+                class="btn btn-secondary"
+                disabled={loading}
+            >
+                Refresh
+            </button>
+            <button
+                on:click={() => (showCreateModal = true)}
+                class="btn btn-primary"
+            >
+                Create Share
+            </button>
+        </div>
     </div>
 
     {#if loading}
@@ -257,42 +264,58 @@
     {:else}
         <div class="space-y-4">
             {#each shares as share}
-                <div class="bg-white dark:bg-card shadow rounded-lg p-6">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="flex items-center space-x-3 mb-3">
-                                <h3
-                                    class="text-lg font-semibold text-gray-900 dark:text-white"
-                                >
+                <div class="bg-white dark:bg-card shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-border">
+                    <!-- Header Section -->
+                    <div class="flex items-start justify-between mb-6">
+                        <div class="flex items-center space-x-4">
+                            <!-- Share Icon with glow effect -->
+                            <div class="relative">
+                                <div class="absolute inset-0 {share.available
+                                    ? 'bg-gradient-to-br from-orange-400 to-amber-500'
+                                    : 'bg-gradient-to-br from-gray-400 to-gray-500'} rounded-xl blur opacity-25"></div>
+                                <div class="relative w-14 h-14 {share.available
+                                    ? 'bg-gradient-to-br from-orange-100 to-amber-100 dark:from-orange-900/40 dark:to-amber-900/40'
+                                    : 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/40 dark:to-gray-700/40'} rounded-xl flex items-center justify-center shadow-lg">
+                                    <svg class="w-7 h-7 {share.available ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-900 dark:text-white">
                                     {share.name}
                                 </h3>
-                                <span
-                                    class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(
-                                        share.available,
-                                    )}"
-                                >
-                                    {share.available
-                                        ? "Available"
-                                        : "Unavailable"}
-                                </span>
+                                <div class="flex items-center flex-wrap gap-2 mt-1">
+                                    <!-- Status Badge -->
+                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full {share.available
+                                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white'
+                                        : 'bg-gradient-to-r from-gray-500 to-gray-600 text-white'}">
+                                        {share.available ? "AVAILABLE" : "UNAVAILABLE"}
+                                    </span>
+                                    <!-- Read Only Badge -->
+                                    {#if share.read_only}
+                                        <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white">
+                                            READ ONLY
+                                        </span>
+                                    {/if}
+                                    <!-- Guest Access Badge -->
+                                    {#if share.guest_ok}
+                                        <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white">
+                                            GUEST OK
+                                        </span>
+                                    {/if}
+                                </div>
                             </div>
-                            <p class="text-gray-600 dark:text-gray-300 mb-2">
-                                {share.comment}
-                            </p>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                Path: {share.path}
-                            </p>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                Users: {share.users.join(", ")}
-                            </p>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                Groups: {share.groups.join(", ")}
-                            </p>
                         </div>
+
+                        <!-- Action Buttons -->
                         <div class="flex space-x-2">
                             <button
                                 on:click={() => toggleShare(share)}
-                                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                class="p-2 rounded-lg {share.available
+                                    ? 'text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                    : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/20'}"
                                 title="Toggle share availability"
                                 aria-label="Toggle share availability"
                             >
@@ -312,7 +335,7 @@
                             </button>
                             <button
                                 on:click={() => openEditModal(share)}
-                                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                class="p-2 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                 title="Edit share"
                                 aria-label="Edit share"
                             >
@@ -332,7 +355,7 @@
                             </button>
                             <button
                                 on:click={() => deleteShare(share.name)}
-                                class="p-2 text-gray-400 hover:text-red-600"
+                                class="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                                 title="Delete share"
                                 aria-label="Delete share"
                             >
@@ -350,6 +373,60 @@
                                     />
                                 </svg>
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- Share Details -->
+                    <div class="space-y-4">
+                        <!-- Comment -->
+                        {#if share.comment}
+                            <div>
+                                <p class="text-sm text-gray-600 dark:text-gray-300">
+                                    {share.comment}
+                                </p>
+                            </div>
+                        {/if}
+
+                        <!-- Details Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                                    Path
+                                </p>
+                                <p class="font-mono text-sm text-gray-900 dark:text-white flex items-center">
+                                    <svg class="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                                    </svg>
+                                    {share.path}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                                    Browseable
+                                </p>
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-2 h-2 rounded-full {share.browseable ? 'bg-green-500' : 'bg-gray-400'}"></div>
+                                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {share.browseable ? 'Yes' : 'No'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                                    Users ({share.users.length})
+                                </p>
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {share.users.length > 0 ? share.users.join(", ") : 'None'}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                                    Groups ({share.groups.length})
+                                </p>
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {share.groups.length > 0 ? share.groups.join(", ") : 'None'}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>

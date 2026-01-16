@@ -457,9 +457,20 @@
     <div class="space-y-6">
       <!-- Disk I/O Graph -->
       <div class="card">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Disk I/O
-        </h3>
+        <div class="flex items-center space-x-4 mb-6">
+          <!-- Disk Icon with glow effect -->
+          <div class="relative">
+            <div class="absolute inset-0 bg-gradient-to-br from-green-400 to-emerald-500 rounded-xl blur opacity-25"></div>
+            <div class="relative w-14 h-14 bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 rounded-xl flex items-center justify-center shadow-lg">
+              <svg class="w-7 h-7 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5h4M4 7h16"/>
+              </svg>
+            </div>
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+            Disk I/O
+          </h3>
+        </div>
         <div class="space-y-4">
           <div class="flex justify-around">
             <!-- Read Gauge -->
@@ -631,9 +642,20 @@
 
       <!-- Network I/O Graph -->
       <div class="card">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Network I/O
-        </h3>
+        <div class="flex items-center space-x-4 mb-6">
+          <!-- Network Icon with glow effect -->
+          <div class="relative">
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-xl blur opacity-25"></div>
+            <div class="relative w-14 h-14 bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/40 dark:to-cyan-900/40 rounded-xl flex items-center justify-center shadow-lg">
+              <svg class="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+              </svg>
+            </div>
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+            Network I/O
+          </h3>
+        </div>
         <div class="space-y-4">
           <div class="flex justify-around">
             <!-- Download Gauge -->
@@ -649,11 +671,17 @@
                     fill="none"
                     class="dark:stroke-gray-600"
                   />
+                  <defs>
+                    <linearGradient id="downloadGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" style="stop-color:#3B82F6" />
+                      <stop offset="100%" style="stop-color:#06B6D4" />
+                    </linearGradient>
+                  </defs>
                   <circle
                     cx="64"
                     cy="64"
                     r="56"
-                    stroke="#8B5CF6"
+                    stroke="url(#downloadGradient)"
                     stroke-width="8"
                     fill="none"
                     stroke-dasharray={`${((networkIOHistory[networkIOHistory.length - 1]?.rx || 0) / calculateScale(networkIOHistory, "net").max) * 351.86} 351.86`}
@@ -689,11 +717,17 @@
                     fill="none"
                     class="dark:stroke-gray-600"
                   />
+                  <defs>
+                    <linearGradient id="uploadGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" style="stop-color:#10B981" />
+                      <stop offset="100%" style="stop-color:#34D399" />
+                    </linearGradient>
+                  </defs>
                   <circle
                     cx="64"
                     cy="64"
                     r="56"
-                    stroke="#EC4899"
+                    stroke="url(#uploadGradient)"
                     stroke-width="8"
                     fill="none"
                     stroke-dasharray={`${((networkIOHistory[networkIOHistory.length - 1]?.tx || 0) / calculateScale(networkIOHistory, "net").max) * 351.86} 351.86`}
@@ -750,13 +784,13 @@
                     cx={xPos}
                     cy={100 - (point.rx / networkScale.max) * 100 + "%"}
                     r="2"
-                    fill="#8B5CF6"
+                    fill="#06B6D4"
                   />
                   <circle
                     cx={xPos}
                     cy={100 - (point.tx / networkScale.max) * 100 + "%"}
                     r="2"
-                    fill="#EC4899"
+                    fill="#10B981"
                   />
                   {#if i > 0}
                     {@const prevXPos =
@@ -768,7 +802,7 @@
                         "%"}
                       x2={xPos}
                       y2={100 - (point.rx / networkScale.max) * 100 + "%"}
-                      stroke="#8B5CF6"
+                      stroke="#06B6D4"
                       stroke-width="2"
                       stroke-linejoin="round"
                       stroke-linecap="round"
@@ -780,7 +814,7 @@
                         "%"}
                       x2={xPos}
                       y2={100 - (point.tx / networkScale.max) * 100 + "%"}
-                      stroke="#EC4899"
+                      stroke="#10B981"
                       stroke-width="2"
                       stroke-linejoin="round"
                       stroke-linecap="round"
@@ -792,11 +826,11 @@
           </div>
           <div class="flex items-center space-x-4 text-xs">
             <div class="flex items-center space-x-1">
-              <div class="w-3 h-3 bg-purple-500 rounded-full"></div>
+              <div class="w-3 h-3 bg-cyan-500 rounded-full"></div>
               <span class="text-gray-600 dark:text-gray-300">Download</span>
             </div>
             <div class="flex items-center space-x-1">
-              <div class="w-3 h-3 bg-pink-500 rounded-full"></div>
+              <div class="w-3 h-3 bg-emerald-500 rounded-full"></div>
               <span class="text-gray-600 dark:text-gray-300">Upload</span>
             </div>
           </div>
@@ -806,54 +840,104 @@
 
     <!-- Network Interfaces -->
     <div class="card">
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Network Interfaces
-      </h3>
+      <div class="flex items-center space-x-4 mb-6">
+        <!-- Network Icon with glow effect -->
+        <div class="relative">
+          <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl blur opacity-25"></div>
+          <div class="relative w-14 h-14 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40 rounded-xl flex items-center justify-center shadow-lg">
+            <svg class="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+            </svg>
+          </div>
+        </div>
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+          Network Interfaces
+        </h3>
+      </div>
       <div class="space-y-4">
         {#each systemStats?.network?.interfaces || [] as iface}
-          <div class="p-4 bg-gray-50 dark:bg-muted rounded-lg">
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center space-x-3">
-                <h4 class="font-medium text-gray-900 dark:text-white">
-                  {iface.name}
-                </h4>
-                <span
-                  class="px-2 py-1 text-xs font-medium rounded-full {iface.status ===
-                  'up'
-                    ? 'bg-green-100 text-green-600'
-                    : 'bg-red-100 text-red-600'}"
-                >
-                  {iface.status}
-                </span>
-                <span class="text-sm text-gray-600 dark:text-gray-300"
-                  >{iface.speed}</span
-                >
+          <div class="bg-white dark:bg-card shadow-lg hover:shadow-xl transition-shadow duration-200 rounded-lg p-6 border border-gray-100 dark:border-border">
+            <!-- Header Section -->
+            <div class="flex items-start justify-between mb-6">
+              <div class="flex items-center space-x-4">
+                <!-- Interface Icon with glow effect -->
+                <div class="relative">
+                  <div class="absolute inset-0 {iface.status === 'up'
+                    ? 'bg-gradient-to-br from-cyan-400 to-blue-500'
+                    : 'bg-gradient-to-br from-gray-400 to-gray-500'} rounded-xl blur opacity-25"></div>
+                  <div class="relative w-14 h-14 {iface.status === 'up'
+                    ? 'bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-cyan-900/40 dark:to-blue-900/40'
+                    : 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/40 dark:to-gray-700/40'} rounded-xl flex items-center justify-center shadow-lg">
+                    <svg class="w-7 h-7 {iface.status === 'up' ? 'text-cyan-600 dark:text-cyan-400' : 'text-gray-500 dark:text-gray-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                    </svg>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+                    {iface.name}
+                  </h3>
+                  <div class="flex items-center flex-wrap gap-2 mt-1">
+                    <!-- Status Badge -->
+                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full {iface.status === 'up'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white'
+                      : 'bg-gradient-to-r from-gray-500 to-gray-600 text-white'}">
+                      {iface.status.toUpperCase()}
+                    </span>
+                    <!-- Speed Badge -->
+                    {#if iface.speed}
+                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                        {iface.speed}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <!-- Interface Details -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <p class="text-gray-600 dark:text-gray-300">IP Address</p>
-                <p class="font-medium text-gray-900 dark:text-white">
-                  {iface.ip}
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                  IP Address
+                </p>
+                <p class="font-mono text-sm text-gray-900 dark:text-white flex items-center">
+                  <svg class="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                  </svg>
+                  {iface.ip || 'N/A'}
                 </p>
               </div>
               <div>
-                <p class="text-gray-600 dark:text-gray-300">Netmask</p>
-                <p class="font-medium text-gray-900 dark:text-white">
-                  {iface.netmask}
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                  Netmask
+                </p>
+                <p class="font-mono text-sm text-gray-900 dark:text-white">
+                  {iface.netmask || 'N/A'}
                 </p>
               </div>
               <div>
-                <p class="text-gray-600 dark:text-gray-300">Gateway</p>
-                <p class="font-medium text-gray-900 dark:text-white">
-                  {iface.gateway}
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                  Gateway
+                </p>
+                <p class="font-mono text-sm text-gray-900 dark:text-white">
+                  {iface.gateway || 'N/A'}
                 </p>
               </div>
               <div>
-                <p class="text-gray-600 dark:text-gray-300">Traffic</p>
-                <p class="font-medium text-gray-900 dark:text-white">
-                  ↓ {formatBytes(iface.rx)} / ↑ {formatBytes(iface.tx)}
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+                  Traffic
+                </p>
+                <p class="text-sm font-medium text-gray-900 dark:text-white flex items-center">
+                  <svg class="w-4 h-4 mr-1 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                  </svg>
+                  {formatBytes(iface.rx)}
+                  <svg class="w-4 h-4 ml-2 mr-1 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                  </svg>
+                  {formatBytes(iface.tx)}
                 </p>
               </div>
             </div>
