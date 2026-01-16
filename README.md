@@ -77,21 +77,6 @@ sudo journalctl -u arcanas -f   # View logs
 
 ---
 
-## 🎮 Management Script
-
-The `./arcanas` script is your command center using it feels like cheating.
-
-| Command | Action |
-|---------|--------|
-| `./arcanas start` | 🔥 Start backend & frontend dev servers |
-| `./arcanas stop` | 🛑 Stop all running servers |
-| `./arcanas restart` | 🔄 Restart everything |
-| `./arcanas status` | 📊 Check server health |
-| `./arcanas logs` | 📜 View live logs |
-| `./arcanas build` | 🏗️ Compile production binary |
-
----
-
 ## 🏗️ Architecture
 
 ```
