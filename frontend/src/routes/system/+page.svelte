@@ -8,6 +8,7 @@
   import { systemAPI } from "$lib/api.js";
   import { calculateScale, formatBytes } from "$lib/utils/byteUtils.js";
   import { onMount } from "svelte";
+  import Gauge from "$lib/components/Gauge.svelte";
 
   let systemStats = null;
   let loading = true;
@@ -294,7 +295,7 @@
 
           <!-- CPU Graph -->
           <div
-            class="h-32 bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
+            class="graph-height bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
           >
             <!-- Y-axis labels -->
             <div
@@ -461,8 +462,8 @@
           <!-- Disk Icon with glow effect -->
           <div class="relative">
             <div class="absolute inset-0 bg-gradient-to-br from-green-400 to-emerald-500 rounded-xl blur opacity-25"></div>
-            <div class="relative w-14 h-14 bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 rounded-xl flex items-center justify-center shadow-lg">
-              <svg class="w-7 h-7 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="relative icon-container bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40 rounded-xl flex items-center justify-center shadow-lg">
+              <svg class="icon-inner text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5h4M4 7h16"/>
               </svg>
             </div>
@@ -474,91 +475,29 @@
         <div class="space-y-4">
           <div class="flex justify-around">
             <!-- Read Gauge -->
-            <div class="text-center">
-              <div class="relative w-32 h-32 mx-auto">
-                <svg class="w-full h-full transform -rotate-90">
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="#E5E7EB"
-                    stroke-width="8"
-                    fill="none"
-                    class="dark:stroke-gray-600"
-                  />
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="#10B981"
-                    stroke-width="8"
-                    fill="none"
-                    stroke-dasharray={`${((diskIOHistory[diskIOHistory.length - 1]?.read || 0) / calculateScale(diskIOHistory, "all").max) * 351.86} 351.86`}
-                    stroke-linecap="round"
-                  />
-                </svg>
-                <div
-                  class="absolute inset-0 flex flex-col items-center justify-center"
-                >
-                  <span class="text-lg font-bold text-gray-900 dark:text-white"
-                    >{formatDataRate(
-                      (diskIOHistory[diskIOHistory.length - 1]?.read ?? 0) /
-                        (1024 * 1024), // Convert bytes/sec back to MB/s
-                    )}</span
-                  >
-                  <span class="text-xs text-gray-500 dark:text-gray-400"
-                    >Read</span
-                  >
-                </div>
-              </div>
-            </div>
+            <Gauge
+              value={(diskIOHistory[diskIOHistory.length - 1]?.read ?? 0) / (1024 * 1024)}
+              max={calculateScale(diskIOHistory, "all").max / (1024 * 1024)}
+              color="#10B981"
+              label="Read"
+              valueFormatter={(v) => formatDataRate(v)}
+            />
 
             <!-- Write Gauge -->
-            <div class="text-center">
-              <div class="relative w-32 h-32 mx-auto">
-                <svg class="w-full h-full transform -rotate-90">
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="#E5E7EB"
-                    stroke-width="8"
-                    fill="none"
-                    class="dark:stroke-gray-600"
-                  />
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="#F59E0B"
-                    stroke-width="8"
-                    fill="none"
-                    stroke-dasharray={`${((diskIOHistory[diskIOHistory.length - 1]?.write || 0) / calculateScale(diskIOHistory, "all").max) * 351.86} 351.86`}
-                    stroke-linecap="round"
-                  />
-                </svg>
-                <div
-                  class="absolute inset-0 flex flex-col items-center justify-center"
-                >
-                  <span class="text-lg font-bold text-gray-900 dark:text-white"
-                    >{formatDataRate(
-                      (diskIOHistory[diskIOHistory.length - 1]?.write ?? 0) /
-                        (1024 * 1024), // Convert bytes/sec back to MB/s
-                    )}</span
-                  >
-                  <span class="text-xs text-gray-500 dark:text-gray-400"
-                    >Write</span
-                  >
-                </div>
-              </div>
-            </div>
+            <Gauge
+              value={(diskIOHistory[diskIOHistory.length - 1]?.write ?? 0) / (1024 * 1024)}
+              max={calculateScale(diskIOHistory, "all").max / (1024 * 1024)}
+              color="#F59E0B"
+              label="Write"
+              valueFormatter={(v) => formatDataRate(v)}
+            />
           </div>
           <div
-            class="h-32 bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
+            class="graph-height bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
           >
             <!-- Y-axis labels -->
             <div
-              class="flex flex-col justify-between text-xs text-gray-500 mr-2 w-16"
+              class="flex flex-col justify-between text-xs text-gray-500 mr-2 y-axis-width"
             >
               {#each calculateScale(diskIOHistory, "all").steps as step}
                 <span>{(step / (1024 * 1024)).toFixed(1)} MB/s</span>
@@ -646,8 +585,8 @@
           <!-- Network Icon with glow effect -->
           <div class="relative">
             <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-xl blur opacity-25"></div>
-            <div class="relative w-14 h-14 bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/40 dark:to-cyan-900/40 rounded-xl flex items-center justify-center shadow-lg">
-              <svg class="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="relative icon-container bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/40 dark:to-cyan-900/40 rounded-xl flex items-center justify-center shadow-lg">
+              <svg class="icon-inner text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
               </svg>
             </div>
@@ -659,103 +598,29 @@
         <div class="space-y-4">
           <div class="flex justify-around">
             <!-- Download Gauge -->
-            <div class="text-center">
-              <div class="relative w-32 h-32 mx-auto">
-                <svg class="w-full h-full transform -rotate-90">
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="#E5E7EB"
-                    stroke-width="8"
-                    fill="none"
-                    class="dark:stroke-gray-600"
-                  />
-                  <defs>
-                    <linearGradient id="downloadGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" style="stop-color:#3B82F6" />
-                      <stop offset="100%" style="stop-color:#06B6D4" />
-                    </linearGradient>
-                  </defs>
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="url(#downloadGradient)"
-                    stroke-width="8"
-                    fill="none"
-                    stroke-dasharray={`${((networkIOHistory[networkIOHistory.length - 1]?.rx || 0) / calculateScale(networkIOHistory, "net").max) * 351.86} 351.86`}
-                    stroke-linecap="round"
-                  />
-                </svg>
-                <div
-                  class="absolute inset-0 flex flex-col items-center justify-center"
-                >
-                  <span class="text-lg font-bold text-gray-900 dark:text-white"
-                    >{(
-                      (networkIOHistory[networkIOHistory.length - 1]?.rx ?? 0) /
-                      1000000
-                    ).toFixed(1)} Mbps</span
-                  >
-                  <span class="text-xs text-gray-500 dark:text-gray-400"
-                    >Download</span
-                  >
-                </div>
-              </div>
-            </div>
+            <Gauge
+              value={(networkIOHistory[networkIOHistory.length - 1]?.rx ?? 0) / 1000000}
+              max={calculateScale(networkIOHistory, "net").max / 1000000}
+              color="#06B6D4"
+              label="Download"
+              valueFormatter={(v) => (v * 1000000 / 1000000).toFixed(1) + " Mbps"}
+            />
 
             <!-- Upload Gauge -->
-            <div class="text-center">
-              <div class="relative w-32 h-32 mx-auto">
-                <svg class="w-full h-full transform -rotate-90">
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="#E5E7EB"
-                    stroke-width="8"
-                    fill="none"
-                    class="dark:stroke-gray-600"
-                  />
-                  <defs>
-                    <linearGradient id="uploadGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" style="stop-color:#10B981" />
-                      <stop offset="100%" style="stop-color:#34D399" />
-                    </linearGradient>
-                  </defs>
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="url(#uploadGradient)"
-                    stroke-width="8"
-                    fill="none"
-                    stroke-dasharray={`${((networkIOHistory[networkIOHistory.length - 1]?.tx || 0) / calculateScale(networkIOHistory, "net").max) * 351.86} 351.86`}
-                    stroke-linecap="round"
-                  />
-                </svg>
-                <div
-                  class="absolute inset-0 flex flex-col items-center justify-center"
-                >
-                  <span class="text-lg font-bold text-gray-900 dark:text-white"
-                    >{(
-                      (networkIOHistory[networkIOHistory.length - 1]?.tx ?? 0) /
-                      1000000
-                    ).toFixed(1)} Mbps</span
-                  >
-                  <span class="text-xs text-gray-500 dark:text-gray-400"
-                    >Upload</span
-                  >
-                </div>
-              </div>
-            </div>
+            <Gauge
+              value={(networkIOHistory[networkIOHistory.length - 1]?.tx ?? 0) / 1000000}
+              max={calculateScale(networkIOHistory, "net").max / 1000000}
+              color="#10B981"
+              label="Upload"
+              valueFormatter={(v) => (v * 1000000 / 1000000).toFixed(1) + " Mbps"}
+            />
           </div>
           <div
-            class="h-32 bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
+            class="graph-height bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
           >
             <!-- Y-axis labels -->
             <div
-              class="flex flex-col justify-between text-xs text-gray-500 mr-2 w-16"
+              class="flex flex-col justify-between text-xs text-gray-500 mr-2 y-axis-width"
             >
               {#each calculateScale(networkIOHistory, "net").steps as step}
                 <span>{(step / 1000000).toFixed(1)} Mbps</span>
@@ -844,8 +709,8 @@
         <!-- Network Icon with glow effect -->
         <div class="relative">
           <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl blur opacity-25"></div>
-          <div class="relative w-14 h-14 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40 rounded-xl flex items-center justify-center shadow-lg">
-            <svg class="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="relative icon-container bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40 rounded-xl flex items-center justify-center shadow-lg">
+            <svg class="icon-inner text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
             </svg>
           </div>
@@ -865,10 +730,10 @@
                   <div class="absolute inset-0 {iface.status === 'up'
                     ? 'bg-gradient-to-br from-cyan-400 to-blue-500'
                     : 'bg-gradient-to-br from-gray-400 to-gray-500'} rounded-xl blur opacity-25"></div>
-                  <div class="relative w-14 h-14 {iface.status === 'up'
+                  <div class="relative icon-container {iface.status === 'up'
                     ? 'bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-cyan-900/40 dark:to-blue-900/40'
                     : 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/40 dark:to-gray-700/40'} rounded-xl flex items-center justify-center shadow-lg">
-                    <svg class="w-7 h-7 {iface.status === 'up' ? 'text-cyan-600 dark:text-cyan-400' : 'text-gray-500 dark:text-gray-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="icon-inner {iface.status === 'up' ? 'text-cyan-600 dark:text-cyan-400' : 'text-gray-500 dark:text-gray-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
                     </svg>
                   </div>
@@ -980,10 +845,10 @@
                   <div class="absolute inset-0 {disk?.type === 'raid'
                     ? 'bg-gradient-to-br from-indigo-400 to-purple-500'
                     : 'bg-gradient-to-br from-green-400 to-emerald-500'} rounded-xl blur opacity-25"></div>
-                  <div class="relative w-14 h-14 {disk?.type === 'raid'
+                  <div class="relative icon-container {disk?.type === 'raid'
                     ? 'bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40'
                     : 'bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/40 dark:to-emerald-900/40'} rounded-xl flex items-center justify-center shadow-lg">
-                    <svg class="w-7 h-7 {disk?.type === 'raid' ? 'text-indigo-600 dark:text-indigo-400' : 'text-green-600 dark:text-green-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="icon-inner {disk?.type === 'raid' ? 'text-indigo-600 dark:text-indigo-400' : 'text-green-600 dark:text-green-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5h4M4 7h16"/>
                     </svg>
                   </div>

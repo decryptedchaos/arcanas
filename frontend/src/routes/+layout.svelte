@@ -85,15 +85,15 @@
   />
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 dark:bg-surface flex {darkModeClass}">
+<div class="h-screen bg-gray-50 dark:bg-surface flex overflow-hidden {darkModeClass}">
   <!-- Sidebar -->
   <Sidebar bind:sidebarOpen />
 
   <!-- Main Content -->
-  <div class="flex-1 flex flex-col overflow-hidden">
+  <div class="flex-1 flex flex-col">
     <!-- Top Navigation -->
     <header
-      class="bg-white dark:bg-card shadow-sm border-b border-gray-200 dark:border-gray-700 z-10"
+      class="bg-white dark:bg-card shadow-sm border-b border-gray-200 dark:border-gray-700 z-10 flex-shrink-0"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">

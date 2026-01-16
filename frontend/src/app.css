@@ -3,10 +3,52 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Base scale factor - adjust this to scale entire UI */
+    --scale-factor: 0.85;
+
+    /* Derived dimensions based on scale */
+    --spacing-xs: calc(0.25rem * var(--scale-factor));
+    --spacing-sm: calc(0.5rem * var(--scale-factor));
+    --spacing-md: calc(1rem * var(--scale-factor));
+    --spacing-lg: calc(1.5rem * var(--scale-factor));
+    --spacing-xl: calc(2rem * var(--scale-factor));
+    --spacing-2xl: calc(3rem * var(--scale-factor));
+
+    /* Font sizes */
+    --font-xs: calc(0.75rem * var(--scale-factor));
+    --font-sm: calc(0.875rem * var(--scale-factor));
+    --font-base: calc(1rem * var(--scale-factor));
+    --font-lg: calc(1.125rem * var(--scale-factor));
+    --font-xl: calc(1.25rem * var(--scale-factor));
+    --font-2xl: calc(1.5rem * var(--scale-factor));
+    --font-3xl: calc(1.875rem * var(--scale-factor));
+
+    /* Icon sizes */
+    --icon-xs: calc(1rem * var(--scale-factor));
+    --icon-sm: calc(1.25rem * var(--scale-factor));
+    --icon-md: calc(1.5rem * var(--scale-factor));
+    --icon-lg: calc(2rem * var(--scale-factor));
+    --icon-xl: calc(2.5rem * var(--scale-factor));
+
+    /* Gauge/chart dimensions */
+    --gauge-size: calc(12rem * var(--scale-factor));
+    --gauge-stroke: calc(0.5rem * var(--scale-factor));
+    --graph-height: calc(12rem * var(--scale-factor));
+    --y-axis-width: calc(4.8rem * var(--scale-factor));
+
+    /* Icon container sizes */
+    --icon-container-sm: calc(2.5rem * var(--scale-factor));
+    --icon-container-md: calc(3rem * var(--scale-factor));
+    --icon-container-lg: calc(3.5rem * var(--scale-factor));
+    --icon-container-xl: calc(4rem * var(--scale-factor));
+  }
+
   html, body {
     @apply bg-gray-50 text-gray-900 dark:bg-surface dark:text-white;
+    font-size: var(--font-base);
   }
-  
+
   html {
     scrollbar-gutter: stable;
   }
@@ -43,7 +85,7 @@
   .card {
     @apply bg-white dark:bg-card rounded-lg shadow-md border border-gray-200 dark:border-border p-6;
   }
-  
+
   .btn {
     @apply px-4 py-2 rounded-md font-medium transition-colors duration-200 whitespace-nowrap flex items-center;
   }
@@ -70,5 +112,23 @@
   
   .rotate-90 {
     transform: rotate(90deg);
+  }
+
+  .graph-height {
+    height: var(--graph-height);
+  }
+
+  .icon-container {
+    width: var(--icon-container-lg);
+    height: var(--icon-container-lg);
+  }
+
+  .icon-inner {
+    width: var(--icon-md);
+    height: var(--icon-md);
+  }
+
+  .y-axis-width {
+    width: var(--y-axis-width);
   }
 }

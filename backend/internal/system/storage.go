@@ -236,10 +236,12 @@ func GetDiskIORates() (map[string]interface{}, error) {
 		line := scanner.Text()
 		fields := strings.Fields(line)
 		if len(fields) >= 14 {
-			// Skip partitions and virtual devices
+			// Skip partitions, virtual devices, and RAID arrays
+			// Only count physical disk I/O to avoid double-counting
 			device := fields[2]
 			if strings.Contains(device, "loop") || strings.Contains(device, "ram") ||
-				strings.Contains(device, "dm-") || strings.Contains(device, "sr") {
+				strings.Contains(device, "dm-") || strings.Contains(device, "sr") ||
+				strings.HasPrefix(device, "md") {
 				continue
 			}
 
