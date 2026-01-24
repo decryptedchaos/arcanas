@@ -129,14 +129,22 @@ func GetDiskStats(w http.ResponseWriter, r *http.Request) {
 			usage = float64(disk.Used) / float64(disk.Size) * 100
 		}
 
-		// Get filesystem info
-		filesystem := "unknown"
+		// Get filesystem info - prefer storage stats fstype (includes linux_raid_member)
+		filesystem := disk.Fstype
+		if filesystem == "" {
+			filesystem = "unknown"
+		}
 		mountpoint := ""
 
-		// Try to get mountpoint and filesystem from df
+		// Try to get mountpoint from df (more reliable for mounted filesystems)
 		if fsInfo := getMountInfo(disk.Device); fsInfo != nil {
-			filesystem = fsInfo.Filesystem
-			mountpoint = fsInfo.Mountpoint
+			if fsInfo.Mountpoint != "" {
+				mountpoint = fsInfo.Mountpoint
+			}
+			// Use storage stats fstype as primary source, fall back to mountinfo for actual mounted filesystems
+			if fsInfo.Filesystem != "" && fsInfo.Filesystem != "unknown" && filesystem == "unknown" {
+				filesystem = fsInfo.Filesystem
+			}
 		}
 
 		disks = append(disks, models.DiskStats{
@@ -938,4 +946,217 @@ func GetPartitions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
 		return
 	}
+}
+
+// DeviceMount represents a mounted device that can be managed
+type DeviceMount struct {
+	Device     string `json:"device"`
+	MountPoint string `json:"mount_point"`
+	Filesystem string `json:"filesystem"`
+	Used       int64  `json:"used"`
+	Size       int64  `json:"size"`
+	Available  int64  `json:"available"`
+}
+
+// GetDeviceMounts returns all arcanas-managed device mounts
+// This includes both /srv/* pools (for new direct mount architecture) and /mnt/arcanas-disk-* (legacy)
+func GetDeviceMounts(w http.ResponseWriter, r *http.Request) {
+	mounts := []DeviceMount{}
+	// Use a map to deduplicate by mount point
+	seenMounts := make(map[string]bool)
+
+	// Use lsblk to find mounted devices more reliably
+	// lsblk -J -o NAME,PATH,MOUNTPOINT,FSTYPE,SIZE
+	cmd := exec.Command("lsblk", "-J", "-o", "NAME,PATH,MOUNTPOINT,FSTYPE,SIZE")
+	output, err := cmd.Output()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list mounts: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	type LsblkDevice struct {
+		Name       string        `json:"name"`
+		Path       string        `json:"path"`
+		Mountpoint *string       `json:"mountpoint"`
+		Fstype     *string       `json:"fstype"`
+		Size       string        `json:"size"`
+		Children   []LsblkDevice `json:"children"`
+	}
+	type LsblkOutput struct {
+		Blockdevices []LsblkDevice `json:"blockdevices"`
+	}
+
+	var result LsblkOutput
+	if err := json.Unmarshal(output, &result); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse mount info: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Recursive function to process devices
+	var processDevice func(d LsblkDevice)
+	processDevice = func(d LsblkDevice) {
+		// Check if this device has an arcanas-disk- mount point (legacy)
+		// OR a /srv/* mount point (new architecture)
+		if d.Mountpoint != nil {
+			mountPoint := *d.Mountpoint
+			isArcanasMount := strings.HasPrefix(mountPoint, "/mnt/arcanas-disk-") ||
+				strings.HasPrefix(mountPoint, "/srv/") && mountPoint != "/srv/"
+
+			if isArcanasMount {
+				// Skip if we've already seen this mount point
+				if seenMounts[mountPoint] {
+					return
+				}
+				seenMounts[mountPoint] = true
+
+				// Get disk usage for this mount point
+				var used, size int64
+
+				// Try to get usage from df
+				dfCmd := exec.Command("df", "-B1", "--output=size,used", mountPoint)
+				dfOutput, _ := dfCmd.Output()
+				if dfOutput != nil {
+					lines := strings.Split(string(dfOutput), "\n")
+					if len(lines) >= 2 {
+						fields := strings.Fields(lines[1])
+						if len(fields) >= 2 {
+							size, _ = strconv.ParseInt(fields[0], 10, 64)
+							used, _ = strconv.ParseInt(fields[1], 10, 64)
+						}
+					}
+				}
+
+				mounts = append(mounts, DeviceMount{
+					Device:     d.Path,
+					MountPoint: mountPoint,
+					Filesystem: func() string { if d.Fstype != nil { return *d.Fstype }; return "" }(),
+					Used:       used,
+					Size:       size,
+					Available:  size - used,
+				})
+			}
+		}
+
+		// Process children
+		for _, child := range d.Children {
+			processDevice(child)
+		}
+	}
+
+	for _, device := range result.Blockdevices {
+		processDevice(device)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(mounts)
+}
+
+// UnmountDeviceRequest contains the device path to unmount
+type UnmountDeviceRequest struct {
+	Device     string `json:"device"`
+	MountPoint string `json:"mount_point"`
+}
+
+// UnmountDevice unmounts a device, freeing it for iSCSI or other uses
+func UnmountDevice(w http.ResponseWriter, r *http.Request) {
+	var req UnmountDeviceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Validate mount point is an arcanas-managed mount
+	// Supports both /srv/* pools (new architecture) and /mnt/arcanas-disk-* (legacy)
+	isValidMount := strings.HasPrefix(req.MountPoint, "/mnt/arcanas-disk-") ||
+		(strings.HasPrefix(req.MountPoint, "/srv/") && req.MountPoint != "/srv/")
+	if !isValidMount {
+		http.Error(w, "Only arcanas-managed device mounts can be unmounted via this API", http.StatusBadRequest)
+		return
+	}
+
+	// Check if mount point exists and is mounted
+	cmd := exec.Command("findmnt", "-n", req.MountPoint)
+	if err := cmd.Run(); err != nil {
+		http.Error(w, fmt.Sprintf("Mount point %s is not mounted", req.MountPoint), http.StatusBadRequest)
+		return
+	}
+
+	// Try normal unmount first
+	cmd = exec.Command("sudo", "umount", req.MountPoint)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If normal unmount fails, try lazy unmount
+		cmd = exec.Command("sudo", "umount", "-l", req.MountPoint)
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			log.Printf("Failed to unmount %s: %v, output: %s", req.MountPoint, err, string(output))
+			http.Error(w, fmt.Sprintf("Failed to unmount: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	log.Printf("Unmounted %s - device %s is now available for iSCSI", req.MountPoint, req.Device)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":    "Device unmounted successfully",
+		"device":     req.Device,
+		"mount_point": req.MountPoint,
+	})
+}
+
+// MountDeviceRequest contains the device path and mount point to mount
+type MountDeviceRequest struct {
+	Device     string `json:"device"`
+	MountPoint string `json:"mount_point"`
+}
+
+// MountDevice remounts a previously unmounted device
+func MountDevice(w http.ResponseWriter, r *http.Request) {
+	var req MountDeviceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Validate mount point is an arcanas-managed mount
+	// Supports both /srv/* pools (new architecture) and /mnt/arcanas-disk-* (legacy)
+	isValidMount := strings.HasPrefix(req.MountPoint, "/mnt/arcanas-disk-") ||
+		(strings.HasPrefix(req.MountPoint, "/srv/") && req.MountPoint != "/srv/")
+	if !isValidMount {
+		http.Error(w, "Only arcanas-managed device mounts can be mounted via this API", http.StatusBadRequest)
+		return
+	}
+
+	// Check if already mounted
+	cmd := exec.Command("findmnt", "-n", req.MountPoint)
+	if err := cmd.Run(); err == nil {
+		http.Error(w, fmt.Sprintf("Mount point %s is already mounted", req.MountPoint), http.StatusConflict)
+		return
+	}
+
+	// Create mount point directory if it doesn't exist
+	cmd = exec.Command("sudo", "mkdir", "-p", req.MountPoint)
+	if err := cmd.Run(); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create mount point: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Mount the device
+	cmd = exec.Command("sudo", "mount", req.Device, req.MountPoint)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Failed to mount %s at %s: %v, output: %s", req.Device, req.MountPoint, err, string(output))
+		http.Error(w, fmt.Sprintf("Failed to mount: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Mounted %s at %s", req.Device, req.MountPoint)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":    "Device mounted successfully",
+		"device":     req.Device,
+		"mount_point": req.MountPoint,
+	})
 }

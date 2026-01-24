@@ -281,3 +281,116 @@ func CleanupLegacyPool(w http.ResponseWriter, r *http.Request) {
 		"name":    poolName,
 	})
 }
+
+// UnmountStoragePool unmounts a storage pool, freeing the device for other uses (e.g., iSCSI)
+func UnmountStoragePool(w http.ResponseWriter, r *http.Request) {
+	// Extract pool name from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/api/storage-pools/")
+	path = strings.TrimSuffix(path, "/unmount")
+	poolName := strings.TrimSuffix(path, "/")
+
+	// Validate pool name to prevent path traversal
+	if strings.Contains(poolName, "..") || strings.Contains(poolName, "/") {
+		http.Error(w, "Invalid pool name", http.StatusBadRequest)
+		return
+	}
+
+	if poolName == "" {
+		http.Error(w, "Pool name is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := system.UnmountStoragePool(poolName); err != nil {
+		log.Printf("Error unmounting storage pool: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to unmount storage pool: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSONResponse(w, map[string]string{
+		"message": "Storage pool unmounted successfully",
+		"name":    poolName,
+	})
+}
+
+// MountStoragePool mounts a previously unmounted storage pool
+func MountStoragePool(w http.ResponseWriter, r *http.Request) {
+	// Extract pool name from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/api/storage-pools/")
+	path = strings.TrimSuffix(path, "/mount")
+	poolName := strings.TrimSuffix(path, "/")
+
+	// Validate pool name to prevent path traversal
+	if strings.Contains(poolName, "..") || strings.Contains(poolName, "/") {
+		http.Error(w, "Invalid pool name", http.StatusBadRequest)
+		return
+	}
+
+	if poolName == "" {
+		http.Error(w, "Pool name is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := system.MountStoragePool(poolName); err != nil {
+		log.Printf("Error mounting storage pool: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to mount storage pool: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSONResponse(w, map[string]string{
+		"message": "Storage pool mounted successfully",
+		"name":    poolName,
+	})
+}
+
+func SetPoolExportMode(w http.ResponseWriter, r *http.Request) {
+	// Extract pool name from URL path
+	// Format: /api/storage-pools/{name}/export-mode
+	path := strings.TrimPrefix(r.URL.Path, "/api/storage-pools/")
+	path = strings.TrimSuffix(path, "/export-mode")
+	path = strings.TrimSuffix(path, "/")
+	if path == "" {
+		http.Error(w, "Invalid URL format - missing pool name", http.StatusBadRequest)
+		return
+	}
+
+	poolName := path
+
+	// Validate pool name to prevent path traversal
+	if strings.Contains(poolName, "..") || strings.Contains(poolName, "/") {
+		http.Error(w, "Invalid pool name", http.StatusBadRequest)
+		return
+	}
+
+	// Get mode from request body
+	var req struct {
+		ExportMode string `json:"export_mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ExportMode == "" {
+		http.Error(w, "export_mode is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate export mode
+	validModes := map[string]bool{"file": true, "iscsi": true, "available": true}
+	if !validModes[req.ExportMode] {
+		http.Error(w, "Invalid export mode. Must be one of: file, iscsi, available", http.StatusBadRequest)
+		return
+	}
+
+	if err := system.SetPoolExportMode(poolName, req.ExportMode); err != nil {
+		log.Printf("Error setting pool export mode: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to set export mode: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSONResponse(w, map[string]string{
+		"message": "Pool export mode updated successfully",
+		"name":    poolName,
+		"mode":    req.ExportMode,
+	})
+}

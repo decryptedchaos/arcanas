@@ -159,19 +159,19 @@ install_dependencies() {
 # Function to setup storage sudoers configuration
 setup_storage_sudoers() {
     print_status "Setting up sudoers configuration..."
-    
+
     # Ensure sudoers.d directory exists
     mkdir -p /etc/sudoers.d
-    
+
     # Remove old sudoers files to prevent conflicts
     rm -f /etc/sudoers.d/arcanas-storage /etc/sudoers.d/arcanas-users /etc/sudoers.d/arcanas-samba /etc/sudoers.d/arcanas
-    
+
     # Write sudoers configuration inline (no external file needed)
     cat > /etc/sudoers.d/arcanas << 'EOF'
 # Arcanas operations sudoers configuration
 # Allows arcanas user and sudo group to run specific commands without password
 
-Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /usr/bin/mkdir, /bin/mount, /usr/bin/mount, /bin/umount, /usr/bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /sbin/mkfs*, /usr/sbin/mkfs*, /usr/bin/mergerfs, /bin/sh, /usr/bin/sh, /usr/bin/sed, /bin/sed, /bin/rmdir, /usr/bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/bin/chown, /bin/chown, /usr/sbin/mdadm, /usr/bin/mdadm, /usr/bin/true, /usr/bin/tee, /bin/cat, /usr/bin/cat, /bin/chmod, /usr/bin/chmod, /bin/rm, /usr/bin/rm, /bin/systemctl, /usr/sbin/systemctl
+Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /usr/bin/mkdir, /bin/mount, /usr/bin/mount, /bin/umount, /usr/bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /sbin/mkfs*, /usr/sbin/mkfs*, /usr/bin/mergerfs, /bin/sh, /usr/bin/sh, /usr/bin/sed, /bin/sed, /bin/rmdir, /usr/bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/bin/chown, /bin/chown, /usr/sbin/mdadm, /usr/bin/mdadm, /usr/bin/true, /usr/bin/tee, /bin/cat, /usr/bin/cat, /bin/chmod, /usr/bin/chmod, /bin/rm, /usr/bin/rm, /bin/systemctl, /usr/sbin/systemctl, /usr/sbin/wipefs, /sbin/wipefs, /usr/bin/wipefs, /usr/bin/which, /bin/which, /usr/bin/findmnt, /usr/sbin/findmnt, /sbin/blockdev, /usr/sbin/blockdev
 
 Cmnd_Alias ARCANAS_USERS = /usr/sbin/usermod, /usr/sbin/useradd, /usr/sbin/userdel, /usr/sbin/chpasswd, /bin/sh, /usr/bin/sh
 
@@ -182,12 +182,76 @@ Cmnd_Alias ARCANAS_SAMBA = /usr/bin/tee, /usr/bin/smbcontrol, /usr/sbin/smbcontr
 arcanas ALL=(ALL) NOPASSWD: ARCANAS_STORAGE, ARCANAS_USERS, ARCANAS_SERVICES, ARCANAS_SAMBA
 %sudo ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
 EOF
-    
+
     # Set proper permissions
     chmod 440 /etc/sudoers.d/arcanas
     chown root:root /etc/sudoers.d/arcanas
-    
+
     print_success "Sudoers configuration completed"
+}
+
+# Function to setup iSCSI configuration service
+setup_iscsi_config_service() {
+    print_status "Setting up iSCSI burst length configuration service..."
+
+    # Create the configuration script
+    cat > /usr/local/bin/arcanas-iscsi-config.sh << 'EOFSCRIPT'
+#!/bin/bash
+# Configure Arcanas iSCSI Target for slow link compatibility
+# This script sets conservative burst lengths to prevent false completion reporting
+
+ISCSI_TARGET_IQN='iqn.2024-01.com.nas:storage'
+CONFIGFS_TPG_PATH="/sys/kernel/config/target/iscsi/${ISCSI_TARGET_IQN}/tpgt_1/param"
+
+# Wait for configfs to be available
+for i in {1..30}; do
+    if [ -d "$CONFIGFS_TPG_PATH" ]; then
+        break
+    fi
+    sleep 1
+done
+
+# Apply burst length settings
+if [ -d "$CONFIGFS_TPG_PATH" ]; then
+    # FirstBurstLength: 32KB (down from default 64KB)
+    echo 32768 > "${CONFIGFS_TPG_PATH}/FirstBurstLength" 2>/dev/null || echo "Failed to set FirstBurstLength"
+
+    # MaxBurstLength: 64KB (down from default 256KB)
+    echo 65536 > "${CONFIGFS_TPG_PATH}/MaxBurstLength" 2>/dev/null || echo "Failed to set MaxBurstLength"
+
+    logger -t arcanas-iscsi "Applied iSCSI burst length settings for slow link compatibility"
+else
+    logger -t arcanas-iscsi "WARNING: configfs path not found, iSCSI target may not be configured yet"
+    exit 1
+fi
+EOFSCRIPT
+
+    chmod +x /usr/local/bin/arcanas-iscsi-config.sh
+
+    # Create systemd service
+    cat > /etc/systemd/system/arcanas-iscsi-config.service << 'EOFSVC'
+[Unit]
+Description=Configure Arcanas iSCSI Target Burst Lengths
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/arcanas-iscsi-config.sh
+
+[Install]
+WantedBy=multi-user.target
+EOFSVC
+
+    # Enable the service
+    systemctl daemon-reload
+    systemctl enable arcanas-iscsi-config.service 2>/dev/null || true
+
+    # Run it once to apply settings immediately (may fail if target doesn't exist yet)
+    /usr/local/bin/arcanas-iscsi-config.sh 2>/dev/null || true
+
+    print_success "iSCSI configuration service installed"
 }
 
 # Function to setup storage directories
@@ -507,6 +571,7 @@ main() {
     install_dependencies
     setup_storage_sudoers
     setup_storage_directories
+    setup_iscsi_config_service
     download_release
     create_service_user
     install_files

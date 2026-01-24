@@ -144,6 +144,9 @@ export const scsiAPI = {
 
   // Get target sessions
   getSessions: (targetId) => apiRequest(`/scsi-targets/${targetId}/sessions`),
+
+  // Get available backing stores for iSCSI targets
+  getBackingStores: () => apiRequest('/scsi-targets/backing-stores'),
 };
 
 // Samba Shares API

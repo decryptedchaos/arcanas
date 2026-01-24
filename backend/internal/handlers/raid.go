@@ -39,11 +39,7 @@ func CreateRAIDArray(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate request
-	if req.Name == "" {
-		http.Error(w, "Name is required", http.StatusBadRequest)
-		return
-	}
+	// Validate request (name is optional, will be auto-generated)
 	if req.Level == "" {
 		http.Error(w, "RAID level is required", http.StatusBadRequest)
 		return
@@ -53,7 +49,8 @@ func CreateRAIDArray(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := system.CreateRAIDArray(req); err != nil {
+	createdName, err := system.CreateRAIDArray(req)
+	if err != nil {
 		log.Printf("Error creating RAID array: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -62,7 +59,7 @@ func CreateRAIDArray(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(map[string]string{
 		"message": "RAID array created successfully",
-		"name":    req.Name,
+		"name":    createdName,
 	}); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
 		return
@@ -123,6 +120,59 @@ func AddDiskToRAID(w http.ResponseWriter, r *http.Request) {
 		"array":   arrayName,
 		"device":  req.Device,
 	}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+// WipeRAIDSuperblock removes orphaned RAID metadata from a device
+func WipeRAIDSuperblock(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Device string `json:"device"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Device == "" {
+		http.Error(w, "Device is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := system.WipeRAIDSuperblock(req.Device); err != nil {
+		log.Printf("Error wiping RAID superblock: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"message": "RAID superblock wiped successfully",
+		"device":  req.Device,
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+// ExamineRAIDDevice checks a device for RAID metadata
+func ExamineRAIDDevice(w http.ResponseWriter, r *http.Request) {
+	// Extract device from URL query parameter
+	device := r.URL.Query().Get("device")
+	if device == "" {
+		http.Error(w, "Device parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	info, err := system.ExamineRAIDDevice(device)
+	if err != nil {
+		// Return 404 if no RAID metadata found
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(info); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
 		return
 	}

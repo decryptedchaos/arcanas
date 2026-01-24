@@ -25,6 +25,7 @@ type LsblkDevice struct {
 	Name       string        `json:"name"`
 	Size       int64         `json:"size"`
 	Type       string        `json:"type"`
+	Fstype     string        `json:"fstype"`
 	Mountpoint string        `json:"mountpoint"`
 	Children   []LsblkDevice `json:"children"`
 }
@@ -59,7 +60,7 @@ func getDiskStats() ([]models.DiskHealth, error) {
 	var disks []models.DiskHealth
 
 	// Get all block devices as JSON for reliable parsing
-	cmd := exec.Command("lsblk", "-J", "-b", "-o", "NAME,SIZE,TYPE,MOUNTPOINT")
+	cmd := exec.Command("lsblk", "-J", "-b", "-o", "NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -163,6 +164,7 @@ func processDevice(device LsblkDevice, disks []models.DiskHealth) []models.DiskH
 		Health:      95,
 		SmartStatus: "healthy",
 		Type:        func() string { if isRAIDArray { return "raid" } else { return "disk" } }(),
+		Fstype:      device.Fstype,
 	})
 
 	// Process children (e.g., partitions)

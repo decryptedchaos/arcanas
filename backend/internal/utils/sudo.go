@@ -57,3 +57,10 @@ func SudoSystemctlReload(service string) error {
 func SudoServiceReload(service string) error {
 	return SudoRunCommand("service", service, "reload")
 }
+
+// SudoCombinedOutput executes a command with sudo and returns combined stdout/stderr
+func SudoCombinedOutput(command string, args ...string) ([]byte, error) {
+	fullArgs := append([]string{"sudo", command}, args...)
+	cmd := exec.Command(fullArgs[0], fullArgs[1:]...)
+	return cmd.CombinedOutput()
+}

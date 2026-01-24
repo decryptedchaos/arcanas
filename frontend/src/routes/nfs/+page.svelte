@@ -35,6 +35,8 @@
 
   // Editing state
   let editingExport = null;
+  let originalPath = ""; // Store original path to detect changes
+  let editPath = ""; // Editable path
   let editClients = [];
   let editNewClientNetwork = "192.168.1.0/24";
   let editNewClientOptions = {
@@ -145,17 +147,70 @@
 
   function openEditModal(export_item) {
     editingExport = export_item;
-    // Deep copy clients so we don't modify the original until save
-    editClients = export_item.clients.map(client => ({
-      network: client.network,
-      options: client.options,
-      access: client.access
-    }));
+    originalPath = export_item.path;
+    editPath = export_item.path;
+    // Deep copy clients and parse options into structured objects
+    editClients = export_item.clients.map(client => {
+      const opts = parseClientOptions(client.options);
+      return {
+        network: client.network,
+        options: client.options, // Keep original for reference
+        _opts: opts, // Parsed options object for checkbox binding
+        access: client.access
+      };
+    });
     showEditModal = true;
+  }
+
+  // Helper to parse options string into object
+  function parseClientOptions(optionsStr) {
+    const opts = {
+      rw: false,
+      ro: false,
+      sync: false,
+      async: false,
+      no_subtree_check: false,
+      no_root_squash: false,
+      crossmnt: false,
+      no_wdelay: false
+    };
+
+    if (!optionsStr) return opts;
+
+    const parts = optionsStr.split(',');
+    for (const part of parts) {
+      const opt = part.trim();
+      if (opt === 'rw') opts.rw = true;
+      if (opt === 'ro') opts.ro = true;
+      if (opt === 'sync') opts.sync = true;
+      if (opt === 'async') opts.async = true;
+      if (opt === 'no_subtree_check') opts.no_subtree_check = true;
+      if (opt === 'no_root_squash') opts.no_root_squash = true;
+      if (opt === 'crossmnt') opts.crossmnt = true;
+      if (opt === 'no_wdelay') opts.no_wdelay = true;
+    }
+
+    return opts;
+  }
+
+  // Helper to rebuild options string from parsed object
+  function buildOptionsString(opts) {
+    const options = [];
+    if (opts.rw) options.push('rw');
+    else if (opts.ro) options.push('ro');
+    if (opts.sync) options.push('sync');
+    if (opts.no_subtree_check) options.push('no_subtree_check');
+    if (opts.no_root_squash) options.push('no_root_squash');
+    if (opts.async) options.push('async');
+    if (opts.crossmnt) options.push('crossmnt');
+    if (opts.no_wdelay) options.push('no_wdelay');
+    return options.join(',');
   }
 
   function closeEditModal() {
     editingExport = null;
+    originalPath = "";
+    editPath = "";
     editClients = [];
     showEditModal = false;
   }
@@ -222,19 +277,47 @@
 
   async function updateExport() {
     try {
-      if (!editingExport) return;
+      if (!editingExport || !editPath) {
+        alert("Export path is required");
+        return;
+      }
+
+      if (editClients.length === 0) {
+        alert("Please add at least one client access rule");
+        return;
+      }
+
+      // Rebuild options strings from _opts objects
+      const clients = editClients.map(client => ({
+        network: client.network,
+        options: buildOptionsString(client._opts),
+        access: client._opts.rw ? "read-write" : "read-only"
+      }));
 
       const exportData = {
-        path: editingExport.path,
-        clients: editClients,
+        path: editPath,
+        clients: clients,
       };
 
-      await nfsAPI.updateExport(editingExport.path, exportData);
+      // If the path changed, we need to delete the old export and create a new one
+      if (editPath !== originalPath) {
+        if (!confirm(`Changing the export path from "${originalPath}" to "${editPath}" will delete the old export and create a new one. Continue?`)) {
+          return;
+        }
+        // Delete old export
+        await nfsAPI.deleteExport(originalPath);
+        // Create new export
+        await nfsAPI.createExport(exportData);
+      } else {
+        // Normal update - path hasn't changed
+        await nfsAPI.updateExport(originalPath, exportData);
+      }
+
       closeEditModal();
       await loadExports();
     } catch (err) {
       console.error("Failed to update export:", err);
-      alert("Failed to update NFS export");
+      alert("Failed to update NFS export: " + err.message);
     }
   }
 
@@ -394,7 +477,7 @@
     </div>
   {:else}
     <!-- Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
       <div class="stat-card">
         <div class="flex items-center">
           <div class="p-3 bg-blue-100 rounded-lg mr-4">
@@ -418,34 +501,6 @@
             </p>
             <p class="text-2xl font-bold text-gray-900 dark:text-white">
               {exports.length}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="flex items-center">
-          <div class="p-3 bg-purple-100 rounded-lg mr-4">
-            <svg
-              class="h-6 w-6 text-purple-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-              />
-            </svg>
-          </div>
-          <div>
-            <p class="text-sm font-medium text-gray-600 dark:text-gray-300">
-              Active Connections
-            </p>
-            <p class="text-2xl font-bold text-gray-900 dark:text-white">
-              {exports.reduce((sum, e) => sum + e.active_connections, 0)}
             </p>
           </div>
         </div>
@@ -534,12 +589,6 @@
                 <h3 class="text-xl font-bold text-gray-900 dark:text-white">
                   {export_item.path}
                 </h3>
-                <div class="flex items-center flex-wrap gap-2 mt-1">
-                  <!-- Active Connections Badge -->
-                  <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white">
-                    {export_item.active_connections} connections
-                  </span>
-                </div>
               </div>
             </div>
 
@@ -906,22 +955,48 @@
         class="relative bg-white dark:bg-card rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto"
       >
         <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
-          Edit NFS Export: {editingExport.path}
+          Edit NFS Export: {originalPath}
         </h3>
 
         <div class="space-y-4">
-          <!-- Export Path (read-only for now) -->
+          <!-- Export Path (now editable) -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label for="edit-export-path" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Export Path
             </label>
             <input
+              id="edit-export-path"
               type="text"
-              value={editingExport.path}
-              disabled
-              class="w-full px-3 py-2 border border-gray-300 dark:border bg-gray-100 dark:bg-muted rounded-md text-gray-500 dark:text-gray-400"
+              bind:value={editPath}
+              class="w-full px-3 py-2 border border-gray-300 dark:border bg-white dark:bg-card rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 text-gray-900 dark:text-white"
+              placeholder="/mnt/arcanas-disk-md0"
             />
-            <p class="text-xs text-gray-500 mt-1">Path cannot be changed. Delete and recreate to change path.</p>
+            <p class="text-xs text-gray-500 mt-1">
+              {#if editPath !== originalPath}
+                <span class="text-amber-600 dark:text-amber-400">⚠️ Path changed - old export will be deleted and recreated</span>
+              {:else}
+                Current export path. Changing it will delete and recreate the export.
+              {/if}
+            </p>
+            <!-- Quick select from storage pools -->
+            {#if storagePools.length > 0}
+              <div class="mt-2">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Or select from available storage pools:
+                </label>
+                <select
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border rounded-md bg-white dark:bg-card text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  on:change={(e) => editPath = e.target.value}
+                >
+                  <option value="">Select a storage pool...</option>
+                  {#each storagePools as pool}
+                    <option value={pool.mount_point}>
+                      {pool.name} ({pool.type}) - {pool.mount_point}
+                    </option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
           </div>
 
           <!-- Existing Clients -->
@@ -976,30 +1051,22 @@
                           <input
                             type="checkbox"
                             class="mr-2 dark:bg-muted dark:border"
-                            checked={client.options.includes('rw') || !client.options.includes('ro')}
+                            checked={client._opts.rw}
                             on:change={(e) => {
-                              if (e.target.checked) {
-                                client.options = client.options.replace(',ro', '').replace('ro,', '').replace('ro', '');
-                                if (!client.options.includes('rw')) client.options = 'rw,' + client.options;
-                              } else {
-                                client.options = client.options.replace(',rw', '').replace('rw,', '').replace('rw', '');
-                                if (!client.options.includes('ro')) client.options = 'ro,' + client.options;
-                              }
+                              client._opts.rw = e.target.checked;
+                              if (e.target.checked) client._opts.ro = false;
                             }}
                           />
-                          <span class="text-xs text-gray-700 dark:text-gray-300">rw/ro</span>
+                          <span class="text-xs text-gray-700 dark:text-gray-300">rw</span>
                         </label>
                         <label class="flex items-center">
                           <input
                             type="checkbox"
                             class="mr-2 dark:bg-muted dark:border"
-                            checked={client.options.includes('sync')}
+                            checked={client._opts.sync}
                             on:change={(e) => {
-                              if (e.target.checked && !client.options.includes('sync')) {
-                                client.options += ',sync';
-                              } else if (!e.target.checked) {
-                                client.options = client.options.replace(',sync', '').replace('sync', '');
-                              }
+                              client._opts.sync = e.target.checked;
+                              if (e.target.checked) client._opts.async = false;
                             }}
                           />
                           <span class="text-xs text-gray-700 dark:text-gray-300">sync</span>
@@ -1008,13 +1075,9 @@
                           <input
                             type="checkbox"
                             class="mr-2 dark:bg-muted dark:border"
-                            checked={client.options.includes('no_subtree_check')}
+                            checked={client._opts.no_subtree_check}
                             on:change={(e) => {
-                              if (e.target.checked && !client.options.includes('no_subtree_check')) {
-                                client.options += ',no_subtree_check';
-                              } else if (!e.target.checked) {
-                                client.options = client.options.replace(',no_subtree_check', '').replace('no_subtree_check', '');
-                              }
+                              client._opts.no_subtree_check = e.target.checked;
                             }}
                           />
                           <span class="text-xs text-gray-700 dark:text-gray-300">no_subtree_check</span>
@@ -1023,13 +1086,9 @@
                           <input
                             type="checkbox"
                             class="mr-2 dark:bg-muted dark:border"
-                            checked={client.options.includes('no_root_squash')}
+                            checked={client._opts.no_root_squash}
                             on:change={(e) => {
-                              if (e.target.checked && !client.options.includes('no_root_squash')) {
-                                client.options += ',no_root_squash';
-                              } else if (!e.target.checked) {
-                                client.options = client.options.replace(',no_root_squash', '').replace('no_root_squash', '');
-                              }
+                              client._opts.no_root_squash = e.target.checked;
                             }}
                           />
                           <span class="text-xs text-gray-700 dark:text-gray-300">no_root_squash</span>
@@ -1038,13 +1097,10 @@
                           <input
                             type="checkbox"
                             class="mr-2 dark:bg-muted dark:border"
-                            checked={client.options.includes('async')}
+                            checked={client._opts.async}
                             on:change={(e) => {
-                              if (e.target.checked && !client.options.includes('async')) {
-                                client.options += ',async';
-                              } else if (!e.target.checked) {
-                                client.options = client.options.replace(',async', '').replace('async', '');
-                              }
+                              client._opts.async = e.target.checked;
+                              if (e.target.checked) client._opts.sync = false;
                             }}
                           />
                           <span class="text-xs text-gray-700 dark:text-gray-300">async</span>
@@ -1053,13 +1109,9 @@
                           <input
                             type="checkbox"
                             class="mr-2 dark:bg-muted dark:border"
-                            checked={client.options.includes('crossmnt')}
+                            checked={client._opts.crossmnt}
                             on:change={(e) => {
-                              if (e.target.checked && !client.options.includes('crossmnt')) {
-                                client.options += ',crossmnt';
-                              } else if (!e.target.checked) {
-                                client.options = client.options.replace(',crossmnt', '').replace('crossmnt', '');
-                              }
+                              client._opts.crossmnt = e.target.checked;
                             }}
                           />
                           <span class="text-xs text-gray-700 dark:text-gray-300">crossmnt</span>
@@ -1068,13 +1120,9 @@
                           <input
                             type="checkbox"
                             class="mr-2 dark:bg-muted dark:border"
-                            checked={client.options.includes('no_wdelay')}
+                            checked={client._opts.no_wdelay}
                             on:change={(e) => {
-                              if (e.target.checked && !client.options.includes('no_wdelay')) {
-                                client.options += ',no_wdelay';
-                              } else if (!e.target.checked) {
-                                client.options = client.options.replace(',no_wdelay', '').replace('no_wdelay', '');
-                              }
+                              client._opts.no_wdelay = e.target.checked;
                             }}
                           />
                           <span class="text-xs text-gray-700 dark:text-gray-300">no_wdelay</span>
@@ -1082,7 +1130,7 @@
                       </div>
                       <!-- Preview current options -->
                       <div class="mt-2 p-2 bg-gray-50 dark:bg-muted rounded text-xs font-mono text-gray-600 dark:text-gray-300">
-                        {client.options}
+                        {buildOptionsString(client._opts)}
                       </div>
                     </div>
                   </div>

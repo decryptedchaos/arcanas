@@ -13,3 +13,6 @@ nas-dashboard
 # IDE
 .vscode/
 /.idea/
+CLAUDE.md
+.claude
+backend/server

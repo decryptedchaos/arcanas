@@ -77,6 +77,7 @@ type DiskHealth struct {
 	Health      int     `json:"health"`
 	SmartStatus string  `json:"smart_status"`
 	Type        string  `json:"type"` // "disk" or "raid" for frontend sorting
+	Fstype      string  `json:"fstype"` // Filesystem type (e.g., "ext4", "linux_raid_member")
 }
 
 type SystemInfo struct {

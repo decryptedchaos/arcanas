@@ -27,7 +27,7 @@ cat > /etc/sudoers.d/arcanas-storage << 'EOF'
 # Arcanas storage operations sudoers configuration
 # Allows users in sudo group to run storage commands without password
 
-Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /usr/bin/mkdir, /bin/mount, /usr/bin/mount, /bin/umount, /usr/bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/sbin/mkfs*, /usr/bin/mergerfs, /bin/sh, /usr/bin/sh, /usr/bin/sed, /bin/sed, /bin/rmdir, /usr/bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/chown, /usr/bin/chown, /bin/chown, /usr/sbin/mdadm, /usr/bin/mdadm, /usr/bin/true
+Cmnd_Alias ARCANAS_STORAGE = /bin/mkdir, /usr/bin/mkdir, /bin/mount, /usr/bin/mount, /bin/umount, /usr/bin/umount, /usr/sbin/vgcreate, /usr/sbin/lvcreate, /sbin/mkfs, /usr/sbin/mkfs*, /usr/bin/mergerfs, /bin/sh, /usr/bin/sh, /usr/bin/sed, /bin/sed, /bin/rmdir, /usr/bin/rmdir, /usr/sbin/vgremove, /usr/sbin/lvremove, /usr/sbin/lvs, /usr/sbin/vgs, /usr/sbin/pvdisplay, /usr/sbin/pvremove, /usr/sbin/pvcreate, /usr/sbin/chown, /usr/bin/chown, /bin/chown, /usr/sbin/mdadm, /usr/bin/mdadm, /usr/bin/true, /usr/sbin/wipefs, /sbin/wipefs, /usr/bin/wipefs, /usr/bin/which, /bin/which, /usr/bin/findmnt, /usr/sbin/findmnt, /sbin/blockdev, /usr/sbin/blockdev
 
 %sudo ALL=(ALL) NOPASSWD: ARCANAS_STORAGE
 EOF

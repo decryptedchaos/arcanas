@@ -23,77 +23,193 @@ func GetStoragePools() ([]models.StoragePool, error) {
 	// Initialize as empty slice to avoid null JSON encoding
 	pools := make([]models.StoragePool, 0)
 
-	// Get mergerfs mounts (JBOD pools)
-	cmd := exec.Command("findmnt", "-t", "fuse.mergerfs", "-J")
+	// Get all mounts (ext4/xfs/btrfs + mergerfs) at once to simplify parsing
+	cmd := exec.Command("findmnt", "-J")
 	output, err := cmd.Output()
-	if err == nil {
-		// findmnt -J returns { "filesystems": [ ... ] }
-		var result map[string]interface{}
-		if err := json.Unmarshal(output, &result); err == nil {
-			if filesystems, ok := result["filesystems"].([]interface{}); ok {
-				for _, fsRaw := range filesystems {
-					mount, ok := fsRaw.(map[string]interface{})
-					if !ok {
-						continue
+	if err != nil {
+		return pools, nil
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(output, &result); err != nil {
+		return pools, nil
+	}
+
+	// Recursive function to process filesystems (including nested children)
+	var processFilesystem func(fs map[string]interface{}) []models.StoragePool
+	processFilesystem = func(fs map[string]interface{}) []models.StoragePool {
+		var result []models.StoragePool
+
+		target, _ := fs["target"].(string)
+		fstype, _ := fs["fstype"].(string)
+		source, _ := fs["source"].(string)
+
+		// Skip system and special mounts that shouldn't be managed
+		if strings.HasPrefix(target, "/boot") ||
+			strings.HasPrefix(target, "/efi") ||
+			strings.HasPrefix(target, "/[") ||
+			target == "/" ||
+			strings.HasPrefix(target, "/run") ||
+			strings.HasPrefix(target, "/sys") ||
+			strings.HasPrefix(target, "/proc") ||
+			strings.HasPrefix(target, "/dev") {
+			// Process children recursively
+			if children, ok := fs["children"].([]interface{}); ok {
+				for _, childRaw := range children {
+					if child, ok := childRaw.(map[string]interface{}); ok {
+						result = append(result, processFilesystem(child)...)
 					}
-
-					target, _ := mount["target"].(string)
-
-					// Only list arcanas pools
-					if !strings.HasPrefix(target, "/srv/") {
-						continue
-					}
-
-					pool := models.StoragePool{
-						Name:       strings.TrimPrefix(target, "/srv/"),
-						Type:       "mergerfs",
-						MountPoint: target,
-						State:      "active",
-						CreatedAt:  time.Now(),
-					}
-
-					// Parse devices from mergerfs config
-					// findmnt may show truncated source (e.g., "b:c"), so read from fstab
-					// to get the actual source mount points
-					fstabData, err := os.ReadFile("/etc/fstab")
-					if err == nil {
-						fstabLines := strings.Split(string(fstabData), "\n")
-						for _, line := range fstabLines {
-							if strings.Contains(line, target) && strings.Contains(line, "fuse.mergerfs") {
-								// Parse: /mnt/arcanas-disk-sdb:/mnt/arcanas-disk-sdc /srv/vt fuse.mergerfs ...
-								fields := strings.Fields(line)
-								if len(fields) >= 1 {
-									// First field is the source string
-									source := fields[0]
-									if source != "" && source != "none" {
-										// Split by colon to get individual mount points
-										pool.Devices = strings.Split(source, ":")
-										break
-									}
-								}
-							}
-						}
-					}
-
-					// Fallback: if fstab parsing failed, use findmnt output (may be truncated)
-					if len(pool.Devices) == 0 {
-						if src, ok := mount["source"].(string); ok && src != "" {
-							pool.Devices = strings.Split(src, ":")
-						} else if sources, ok := mount["sources"].([]interface{}); ok {
-							for _, source := range sources {
-								if s, ok := source.(string); ok {
-									pool.Devices = append(pool.Devices, s)
-								}
-							}
-						}
-					}
-
-					// Get size and usage
-					pool.Size, pool.Used = GetPathUsage(pool.MountPoint)
-					pool.Available = pool.Size - pool.Used
-
-					pools = append(pools, pool)
 				}
+			}
+			return result
+		}
+
+		// Check if this is an arcanas-managed mount or an MD device
+		isArcanasMount := strings.HasPrefix(target, "/srv/") ||
+			strings.HasPrefix(target, "/mnt/arcanas-disk-")
+		isMDDevice := strings.HasPrefix(source, "/dev/md")
+
+		// Only process arcanas mounts or MD devices with filesystems
+		if !isArcanasMount && !isMDDevice {
+			// Process children recursively
+			if children, ok := fs["children"].([]interface{}); ok {
+				for _, childRaw := range children {
+					if child, ok := childRaw.(map[string]interface{}); ok {
+						result = append(result, processFilesystem(child)...)
+					}
+				}
+			}
+			return result
+		}
+
+		// Skip the base directories
+		if target == "/srv/" || target == "/mnt/arcanas-disk" {
+			return result
+		}
+
+		// Determine pool name and type based on mount location
+		var poolName string
+		var poolType string
+
+		if strings.HasPrefix(target, "/srv/") {
+			// New architecture: /srv/{poolname}
+			poolName = strings.TrimPrefix(target, "/srv/")
+			poolType = "direct"
+		} else if strings.HasPrefix(target, "/mnt/arcanas-disk-") {
+			// Legacy architecture: /mnt/arcanas-disk-{device}
+			deviceName := strings.TrimPrefix(target, "/mnt/arcanas-disk-")
+			poolName = deviceName // Use device name as pool name (e.g., "md0")
+			poolType = "legacy"
+		} else if isMDDevice {
+			// MD device mounted elsewhere (e.g., /mnt/md0, /media/raid)
+			// Use mount point basename as pool name
+			poolName = filepath.Base(target)
+			poolType = "md"
+		} else {
+			poolName = filepath.Base(target)
+			poolType = "directory"
+		}
+
+		pool := models.StoragePool{
+			Name:       poolName,
+			MountPoint: target,
+			State:      "active",
+			CreatedAt:  time.Now(),
+		}
+
+		// Determine pool type based on filesystem (override default)
+		if fstype == "fuse.mergerfs" {
+			pool.Type = "mergerfs"
+		} else if isMDDevice {
+			pool.Type = "md" // RAID array
+		} else if fstype == "ext4" || fstype == "xfs" || fstype == "btrfs" {
+			if poolType == "legacy" {
+				pool.Type = "legacy" // MD devices at old location
+			} else {
+				pool.Type = poolType
+			}
+		} else {
+			pool.Type = poolType
+		}
+
+		// Get source device(s) from fstab
+		fstabData, err := os.ReadFile("/etc/fstab")
+		if err == nil {
+			fstabLines := strings.Split(string(fstabData), "\n")
+			for _, line := range fstabLines {
+				if strings.Contains(line, target) {
+					fields := strings.Fields(line)
+					if len(fields) >= 1 {
+						src := fields[0]
+						if src != "" && src != "none" {
+							// Split by colon for mergerfs, single device otherwise
+							if strings.Contains(line, "fuse.mergerfs") {
+								pool.Devices = strings.Split(src, ":")
+							} else {
+								pool.Devices = []string{src}
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// Fallback: use source from findmnt
+		if len(pool.Devices) == 0 && source != "" {
+			pool.Devices = []string{source}
+		}
+
+		// Get size and usage
+		pool.Size, pool.Used = GetPathUsage(pool.MountPoint)
+		pool.Available = pool.Size - pool.Used
+
+		// Set export mode based on current state
+		// Mounted pools default to "file" mode (for NFS/Samba)
+		// Unmounted pools would be "iscsi" or "available"
+		pool.ExportMode = "file" // Default: mounted filesystem for file sharing
+
+		// Fix permissions on MD device mounts for Samba access
+		// Only for MD devices mounted outside Arcanas-managed locations
+		if isMDDevice && !strings.HasPrefix(target, "/srv/") && !strings.HasPrefix(target, "/mnt/arcanas-disk-") {
+			// Set ownership to nobody:nogroup for Samba access
+			cmd := exec.Command("sudo", "chown", "-R", "nobody:nogroup", target)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				fmt.Printf("Warning: failed to set MD device ownership: %v, output: %s\n", err, string(output))
+			}
+
+			// Set permissions to 0777 for full access
+			cmd = exec.Command("sudo", "chmod", "-R", "0777", target)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				fmt.Printf("Warning: failed to set MD device permissions: %v, output: %s\n", err, string(output))
+			}
+
+			// Set setgid bit for proper group inheritance
+			cmd = exec.Command("sudo", "chmod", "g+s", target)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				fmt.Printf("Warning: failed to set setgid bit: %v, output: %s\n", err, string(output))
+			}
+		}
+
+		result = append(result, pool)
+
+		// Process children recursively
+		if children, ok := fs["children"].([]interface{}); ok {
+			for _, childRaw := range children {
+				if child, ok := childRaw.(map[string]interface{}); ok {
+					result = append(result, processFilesystem(child)...)
+				}
+			}
+		}
+
+		return result
+	}
+
+	// Process all top-level filesystems
+	if filesystems, ok := result["filesystems"].([]interface{}); ok {
+		for _, fsRaw := range filesystems {
+			if fs, ok := fsRaw.(map[string]interface{}); ok {
+				pools = append(pools, processFilesystem(fs)...)
 			}
 		}
 	}
@@ -152,14 +268,96 @@ func GetStoragePools() ([]models.StoragePool, error) {
 func CreateStoragePool(req models.StoragePoolCreateRequest) error {
 	switch req.Type {
 	case "jbod", "mergerfs":
+		// MD devices are now handled via LVM, not auto-mounted
+		// JBOD with mergerfs only applies to raw physical disks (sda, sdb, etc.)
+		if len(req.Devices) == 1 {
+			return fmt.Errorf("single device pools should use 'lvm' type. Create a VG from the device first, then create an LV pool")
+		}
 		return createMergerFSPool(req)
 	case "bind":
 		return createBindMountPool(req)
-	case "lvm":
-		return createLVMPool(req)
+	case "lvm", "lvm_lv":
+		// Mount an existing LVM Logical Volume as a storage pool
+		// req.Devices[0] should be the LV path (e.g., /dev/vg-name/lv-name)
+		if len(req.Devices) != 1 {
+			return fmt.Errorf("LVM pools require exactly one logical volume device")
+		}
+		return createLVMountPool(req)
 	default:
 		return fmt.Errorf("unsupported pool type: %s", req.Type)
 	}
+}
+
+// isRAIDDevice checks if a device is an MD RAID array (md0, md1, etc.)
+func isRAIDDevice(device string) bool {
+	// Check if device path starts with /dev/md
+	return strings.HasPrefix(device, "/dev/md")
+}
+
+// createLVMountPool mounts an existing LVM Logical Volume
+// This is used when you've already created VG+LV and want to mount it as a storage pool
+func createLVMountPool(req models.StoragePoolCreateRequest) error {
+	lvPath := req.Devices[0] // e.g., /dev/vg-raid/lv-data
+	mountPoint := "/srv/" + req.Name
+
+	// Verify the LV exists
+	cmd := exec.Command("sudo", "lvs", lvPath, "-o", "LV_SIZE")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("logical volume not found: %s. Create it first using: sudo lvcreate -L 100G -n lv-name vg-name", lvPath)
+	}
+
+	// Ensure data directory exists
+	cmd = exec.Command("sudo", "mkdir", "-p", "/srv")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create data directory /srv: %v", err)
+	}
+
+	// Check if LV has a filesystem, format if needed
+	cmd = exec.Command("blkid", "-o", "value", "-s", "TYPE", lvPath)
+	fsOutput, err := cmd.Output()
+	hasFilesystem := err == nil && len(strings.TrimSpace(string(fsOutput))) > 0
+
+	if !hasFilesystem {
+		fmt.Printf("Formatting LV %s with ext4...\n", lvPath)
+		formatCmd := exec.Command("sudo", "mkfs.ext4", "-F", lvPath)
+		if out, err := formatCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("mkfs.ext4 failed: %v %s", err, string(out))
+		}
+	}
+
+	// Create mount point
+	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create mount point %s: %v", mountPoint, err)
+	}
+
+	// Mount the LV
+	if out, err := exec.Command("sudo", "mount", lvPath, mountPoint).CombinedOutput(); err != nil {
+		return fmt.Errorf("mount failed: %v %s", err, string(out))
+	}
+
+	// Set permissions
+	cmd = exec.Command("sudo", "chown", "-R", "nobody:nogroup", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: failed to set pool ownership: %v, output: %s\n", err, string(output))
+	}
+
+	cmd = exec.Command("sudo", "chmod", "-R", "0777", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: failed to set pool permissions: %v, output: %s\n", err, string(output))
+	}
+
+	// Add to fstab for persistence (use LV path directly since it persists)
+	cmd = exec.Command("grep", "-q", mountPoint, "/etc/fstab")
+	if err := cmd.Run(); err != nil {
+		fstabEntry := fmt.Sprintf("%s %s ext4 defaults 0 0\n", lvPath, mountPoint)
+		cmd = exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
+		cmd.Run()
+	}
+
+	fmt.Printf("Successfully mounted LV pool %s from %s at %s (size: %s)\n", req.Name, lvPath, mountPoint, strings.TrimSpace(string(output)))
+	return nil
 }
 
 func createMergerFSPool(req models.StoragePoolCreateRequest) error {
@@ -282,7 +480,21 @@ func prepareDiskForPool(device string) (string, error) {
 		}
 	}
 
-	//3. Create persistent mount point
+	//3. Get UUID for device (more reliable than device path)
+	// This handles md0 -> md127 rename issue
+	uuidCmd := exec.Command("blkid", "-s", "UUID", "-o", "value", device)
+	uuidOutput, err := uuidCmd.Output()
+	uuid := strings.TrimSpace(string(uuidOutput))
+	if uuid == "" || err != nil {
+		// Fallback to device path if UUID not available
+		fmt.Printf("Warning: could not get UUID for %s, using device path\n", device)
+		uuid = device
+	} else {
+		// Prepend "UUID=" for fstab
+		uuid = "UUID=" + uuid
+	}
+
+	//4. Create persistent mount point
 	// Naming: /mnt/arcanas-disk-{devname} (e.g. sdb)
 	devName := strings.TrimPrefix(device, "/dev/")
 	mountPath := "/mnt/arcanas-disk-" + devName
@@ -291,19 +503,40 @@ func prepareDiskForPool(device string) (string, error) {
 		return "", fmt.Errorf("failed to make dir %s: %v", mountPath, err)
 	}
 
-	//4. Mount it
-	if out, err := exec.Command("sudo", "mount", device, mountPath).CombinedOutput(); err != nil {
+	//5. Mount it using UUID (or device path as fallback)
+	mountSource := uuid
+	if strings.HasPrefix(uuid, "UUID=") {
+		// For UUID mounting, we need to resolve the actual device
+		// But mount accepts UUID= syntax directly
+		mountSource = uuid
+	} else {
+		mountSource = device
+	}
+
+	if out, err := exec.Command("sudo", "mount", mountSource, mountPath).CombinedOutput(); err != nil {
 		return "", fmt.Errorf("mount failed: %v %s", err, string(out))
 	}
 
-	//5. Add to fstab (for disk persistence)
+	// Set ownership and permissions on the mount point for Samba access
+	// This ensures shares created from these paths have proper access
+	cmd = exec.Command("sudo", "chown", "-R", "nobody:nogroup", mountPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: failed to set disk mount ownership: %v, output: %s\n", err, string(output))
+	}
+
+	cmd = exec.Command("sudo", "chmod", "-R", "0777", mountPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: failed to set disk mount permissions: %v, output: %s\n", err, string(output))
+	}
+
+	//6. Add to fstab (for disk persistence)
 	// Check if entry already exists to avoid duplicates
 	cmd = exec.Command("grep", "-q", mountPath, "/etc/fstab")
 	err = cmd.Run()
 	if err != nil {
 		// Not found in fstab, add it
-		// UUID is safer, but device path used for simplicity
-		fstabEntry := fmt.Sprintf("%s %s ext4 defaults 0 0\n", device, mountPath)
+		// Use UUID for resilience against device renaming (md0 -> md127)
+		fstabEntry := fmt.Sprintf("%s %s ext4 defaults 0 0\n", uuid, mountPath)
 		exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry)).Run()
 	}
 
@@ -494,7 +727,29 @@ func UpdateStoragePool(name string, req models.StoragePoolCreateRequest) error {
 }
 
 func DeleteStoragePool(name string) error {
-	mountPoint := "/srv/" + name
+	// First, find the actual mount point of this pool
+	// Pools can be at different locations:
+	// - /srv/{name} (new direct mount)
+	// - /mnt/arcanas-disk-{name} (legacy)
+	// - Other locations for MD devices
+	pools, err := GetStoragePools()
+	if err != nil {
+		return fmt.Errorf("failed to get storage pools: %v", err)
+	}
+
+	var mountPoint string
+	var foundPool bool
+	for _, pool := range pools {
+		if pool.Name == name {
+			mountPoint = pool.MountPoint
+			foundPool = true
+			break
+		}
+	}
+
+	if !foundPool {
+		return fmt.Errorf("pool %s not found", name)
+	}
 
 	// Check if samba is running and stop it temporarily
 	sambaRunning := false
@@ -530,6 +785,38 @@ func DeleteStoragePool(name string) error {
 		fmt.Printf("Warning: failed to remove from fstab: %v\n", err)
 	}
 
+	// Also try to remove legacy mount points from fstab
+	// Legacy pools might have entries like /dev/md0, UUID=xxx, etc.
+	// We need to find and remove any fstab entry that points to our mount point
+	cmd = exec.Command("sudo", "grep", "-v", "^#", "/etc/fstab")
+	output, err := cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		var newLines []string
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			fields := strings.Fields(line)
+			// Check if this fstab entry mounts to our pool's mount point
+			if len(fields) >= 2 && fields[1] == mountPoint {
+				// Skip this line (remove it from fstab)
+				continue
+			}
+			newLines = append(newLines, line)
+		}
+		// Write back the cleaned fstab
+		if len(newLines) < len(lines) {
+			newFstab := strings.Join(newLines, "\n") + "\n"
+			cmd = exec.Command("sudo", "tee", "/etc/fstab")
+			cmd.Stdin = strings.NewReader(newFstab)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				fmt.Printf("Warning: failed to update fstab: %v, output: %s\n", err, string(output))
+			}
+		}
+	}
+
 	// Remove pool directory and all contents
 	cmd = exec.Command("sudo", "rm", "-rf", mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -544,7 +831,7 @@ func DeleteStoragePool(name string) error {
 		}
 	}
 
-	fmt.Printf("Successfully deleted pool %s\n", name)
+	fmt.Printf("Successfully deleted pool %s (was at %s)\n", name, mountPoint)
 	return nil
 }
 
@@ -552,6 +839,81 @@ func isMounted(mountPoint string) bool {
 	cmd := exec.Command("findmnt", "-n", mountPoint)
 	err := cmd.Run()
 	return err == nil
+}
+
+// unmountWithRetry attempts multiple unmount strategies
+func unmountWithRetry(mountPoint string) error {
+	// Strategy 1: Normal unmount
+	cmd := exec.Command("sudo", "umount", mountPoint)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		fmt.Printf("Successfully unmounted %s\n", mountPoint)
+		return nil
+	}
+
+	fmt.Printf("Normal unmount failed: %s\n", string(output))
+
+	// Strategy 2: Lazy unmount (detach filesystem)
+	cmd = exec.Command("sudo", "umount", "-l", mountPoint)
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		fmt.Printf("Successfully lazy-unmounted %s\n", mountPoint)
+		return nil
+	}
+
+	fmt.Printf("Lazy unmount failed: %s\n", string(output))
+
+	// Strategy 3: Force unmount with fuser (kill processes using the mount)
+	_ = exec.Command("sudo", "fuser", "-km", mountPoint).Run()
+
+	// Try lazy unmount again after killing processes
+	cmd = exec.Command("sudo", "umount", "-l", mountPoint)
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		fmt.Printf("Successfully unmounted %s after killing processes\n", mountPoint)
+		return nil
+	}
+
+	return fmt.Errorf("failed to unmount %s after all attempts: %v, last output: %s", mountPoint, err, string(output))
+}
+
+// removeNFSExportsForPath removes any NFS exports that contain the given path
+func removeNFSExportsForPath(path string) error {
+	// Read exports file
+	exports, err := exec.Command("cat", "/etc/exports").CombinedOutput()
+	if err != nil {
+		return nil // No exports file, nothing to remove
+	}
+
+	lines := strings.Split(string(exports), "\n")
+	var newLines []string
+	removed := false
+
+	for _, line := range lines {
+		// Skip lines that export our path
+		if strings.Contains(line, path) && !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			removed = true
+			continue
+		}
+		newLines = append(newLines, line)
+	}
+
+	if !removed {
+		return nil // No changes needed
+	}
+
+	// Write back the modified exports
+	newExports := strings.Join(newLines, "\n")
+	cmd := exec.Command("sudo", "tee", "/etc/exports")
+	cmd.Stdin = strings.NewReader(newExports)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to update exports: %v, output: %s", err, string(output))
+	}
+
+	// Reload NFS exports
+	_ = exec.Command("sudo", "exportfs", "-ra").Run()
+
+	return nil
 }
 
 // CleanupLegacyPool removes a pool from the old /var/lib/arcanas/ location
@@ -652,4 +1014,153 @@ func GetPathUsage(mountPoint string) (int64, int64) {
 	// we can't reliably get total capacity. Return used for both
 	// or 0, used if we couldn't get any values
 	return used, used
+}
+
+// UnmountStoragePool unmounts a storage pool, freeing the underlying device for other uses (e.g., iSCSI)
+func UnmountStoragePool(poolName string) error {
+	mountPoint := "/srv/" + poolName
+
+	// Check if pool exists
+	if _, err := os.Stat(mountPoint); os.IsNotExist(err) {
+		return fmt.Errorf("pool %s does not exist", poolName)
+	}
+
+	// Check if it's currently mounted
+	if !isMounted(mountPoint) {
+		return fmt.Errorf("pool %s is not mounted", poolName)
+	}
+
+	// Remove any NFS exports that might be using this mount
+	// This is important for freeing the device for iSCSI use
+	if err := removeNFSExportsForPath(mountPoint); err != nil {
+		fmt.Printf("Warning: failed to remove NFS exports: %v\n", err)
+	}
+
+	// Stop Samba temporarily to release file handles
+	sambaRunning := false
+	if cmd := exec.Command("sudo", "systemctl", "is-active", "smbd").Run(); cmd == nil {
+		sambaRunning = true
+		fmt.Printf("Stopping Samba temporarily for pool unmount...\n")
+		_ = exec.Command("sudo", "systemctl", "stop", "smbd").Run()
+	}
+
+	// Use robust unmount with retries
+	err := unmountWithRetry(mountPoint)
+
+	// Restart Samba if it was running
+	if sambaRunning {
+		fmt.Printf("Restarting Samba...\n")
+		if output, startErr := exec.Command("sudo", "systemctl", "start", "smbd").CombinedOutput(); startErr != nil {
+			fmt.Printf("Warning: failed to restart Samba: %v, output: %s\n", startErr, string(output))
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully unmounted %s - device is now available for iSCSI/LVM\n", mountPoint)
+	return nil
+}
+
+// MountStoragePool remounts a previously unmounted storage pool
+func MountStoragePool(poolName string) error {
+	mountPoint := "/srv/" + poolName
+
+	// Check if pool directory exists
+	if _, err := os.Stat(mountPoint); os.IsNotExist(err) {
+		return fmt.Errorf("pool %s does not exist", poolName)
+	}
+
+	// Check if already mounted
+	if isMounted(mountPoint) {
+		return fmt.Errorf("pool %s is already mounted", poolName)
+	}
+
+	// Check if there's an fstab entry for this pool
+	cmd := exec.Command("grep", "-q", mountPoint, "/etc/fstab")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("no fstab entry found for pool %s - cannot remount automatically", poolName)
+	}
+
+	// Mount using fstab entry
+	cmd = exec.Command("sudo", "mount", mountPoint)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to mount %s: %v, output: %s", mountPoint, err, string(output))
+	}
+
+	// Verify the mount was successful
+	if !isMounted(mountPoint) {
+		return fmt.Errorf("mount verification failed for %s", mountPoint)
+	}
+
+	fmt.Printf("Successfully mounted %s\n", mountPoint)
+	return nil
+}
+
+// SetPoolExportMode changes how a storage pool is exported
+// Modes:
+// - "file" - Mounted filesystem for NFS/Samba sharing
+// - "iscsi" - Unmounted, exported as iSCSI LUN
+// - "available" - Unmounted, available for either use
+func SetPoolExportMode(poolName, mode string) error {
+	mountPoint := "/srv/" + poolName
+
+	// Validate mode
+	validModes := map[string]bool{"file": true, "iscsi": true, "available": true}
+	if !validModes[mode] {
+		return fmt.Errorf("invalid export mode: %s (must be file, iscsi, or available)", mode)
+	}
+
+	// Get current pool state
+	pools, err := GetStoragePools()
+	if err != nil {
+		return fmt.Errorf("failed to get pools: %w", err)
+	}
+
+	var currentPool *models.StoragePool
+	for i := range pools {
+		if pools[i].Name == poolName {
+			currentPool = &pools[i]
+			break
+		}
+	}
+
+	if currentPool == nil {
+		return fmt.Errorf("pool %s not found", poolName)
+	}
+
+	currentlyMounted := isMounted(mountPoint)
+
+	// Handle mode transitions
+	switch mode {
+	case "file":
+		// Need to mount for file sharing
+		if !currentlyMounted {
+			if err := MountStoragePool(poolName); err != nil {
+				return fmt.Errorf("failed to mount pool: %w", err)
+			}
+		}
+
+	case "iscsi":
+		// Need to unmount for iSCSI use
+		if currentlyMounted {
+			if err := UnmountStoragePool(poolName); err != nil {
+				return fmt.Errorf("failed to unmount pool: %w", err)
+			}
+		}
+		// Note: The pool will show up in iSCSI backend options when unmounted
+
+	case "available":
+		// Just unmount, don't use for anything
+		if currentlyMounted {
+			if err := UnmountStoragePool(poolName); err != nil {
+				return fmt.Errorf("failed to unmount pool: %w", err)
+			}
+		}
+	}
+
+	fmt.Printf("Pool %s export mode changed to %s\n", poolName, mode)
+	return nil
 }

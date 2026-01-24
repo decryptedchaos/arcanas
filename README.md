@@ -2,27 +2,40 @@
 > **The Ultimate Self-Hosted NAS Management System** 🚀
 
 ![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)
-![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)
+![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)
 ![SvelteKit](https://img.shields.io/badge/SvelteKit-Latest-FF3E00?logo=svelte&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Development-orange)
+![Status](https://img.shields.io/badge/Status-Active-success)
 
-**Arcanas** is a powerful, modern, and lightning-fast NAS management system designed for the enthusiast. Built with a robust Go backend and a sleek SvelteKit frontend, it delivers a premium experience for managing your storage empire.
-
-#### BE ADVISED, THIS IS UNDER HEAVY DEVELOPMENT, WE WOULD WELCOME ANY FIXES YOU WANT TO CONTRIBUTE 
-
-<img width="1864" height="942" alt="image" src="https://github.com/user-attachments/assets/bb4eb1f2-7e7f-4334-a95f-93786cfe698d" />
-
+**Arcanas** is a powerful, modern, and lightning-fast NAS management system designed for the enthusiast. Built with a robust Go backend (standard library only) and a sleek SvelteKit 5 frontend, it delivers a premium experience for managing your storage empire.
 
 ## ✨ Features
 
-- **🚀 Single Binary Deployment** - Zero external dependencies purely compiled magic.
-- **💎 Embedded Frontend** - A beautiful SvelteKit UI baked right into the binary.
-- **⚡ Real-time Monitoring** - Live system vitals, disk I/O, and detailed metrics.
-- **🛡️ Storage Pools** - Advanced management for MergerFS, LVM, and bind mounts.
-- **📼 RAID Mastery** - Create, manage, and monitor RAID arrays with ease.
-- **📂 File Sharing** - Instant NFS & Samba/SMB configuration.
-- **🎯 iSCSI Targets** - Professional-grade iSCSI target management.
-- **🔄 Hot-Reload Dev** - Blazing fast iteration with Air and Vite.
+### Storage Management
+- **🛡️ Storage Pools** - Advanced management for MergerFS, LVM, and direct device mounts
+- **📼 RAID Mastery** - Create, manage, and monitor MD RAID arrays (0, 1, 5, 6, 10)
+- **💿 Disk Management** - Format disks, manage partitions, view SMART data
+- **🔄 Device Mounting** - Mount/unmount devices for switching between storage pools and iSCSI
+
+### File Sharing
+- **📂 NFS Exports** - Configure and manage NFS shares with client access rules
+- **🤝 Samba/SMB** - Set up Windows-compatible file sharing
+- **🎯 Path Editing** - Edit export paths on existing shares without delete/recreate
+
+### iSCSI
+- **💾 iSCSI Targets** - Professional-grade iSCSI target management with LIO/targetcli
+- **🔌 LUN Management** - Create and manage LUNs with block or fileio backstores
+- **🔐 ACL Configuration** - Manage initiator IQNs and access control lists
+
+### Monitoring & System
+- **⚡ Real-time Monitoring** - Live CPU, memory, network, and disk I/O metrics
+- **📊 SMART Data** - Drive health monitoring with test execution
+- **🖥️ System Info** - View processes, logs, and system resources
+- **👥 User Management** - Manage users and service account permissions
+
+### Architecture
+- **🚀 Single Binary** - Zero external runtime dependencies, embedded frontend
+- **⚡ Hot-Reload Dev** - Blazing fast iteration with Air and Vite 6
+- **🎨 Modern UI** - Svelte 5 with SvelteKit, Tailwind CSS, dark mode support
 
 ---
 
@@ -31,36 +44,45 @@
 ### 🛠️ Development Mode
 
 ```bash
-# 1. First time setup (unleash the power)
-sudo ./arcanas setup
+# 1. Clone the repository
+git clone https://github.com/decryptedchaos/arcanas.git
+cd arcanas
 
-# 2. Ignite the engines
-./arcanas start
+# 2. Install frontend dependencies
+cd frontend && npm install
 
-# 3. Access the dashboard
-# Frontend: http://localhost:4000 
-# API:      http://localhost:4000/api
+# 3. Start backend with hot-reload (from project root)
+cd ..
+./dev.sh
+
+# 4. Or start frontend separately
+cd frontend && npm run dev    # Frontend on :5173
+cd ../backend && go run cmd/server/main.go  # Backend on :4000
 ```
+
+**Access the dashboard:**
+- Frontend: http://localhost:5173 (dev) or http://localhost:4000 (prod)
+- API: http://localhost:4000/api
 
 ### 📦 Production Installation
 
-
-### Install Latest 
+#### Install Latest Release
 ```bash
 curl -fsSL https://raw.githubusercontent.com/decryptedchaos/arcanas/master/install.sh | sudo bash
 ```
-### Install specific version
+
+#### Install Specific Version
 ```bash
 curl -fsSL https://raw.githubusercontent.com/decryptedchaos/arcanas/master/install.sh | sudo bash -s -- --version v1.0.0
 ```
 
 The installer will:
-- Download the latest release for your platform
-- Install system dependencies (Samba, NFS, MergerFS, LVM, mdadm, etc.)
-- Create the `arcanas` service user
-- Set up systemd service
-- Configure firewall rules
-- Start the service automatically
+- Download the latest release for your platform (amd64/arm64)
+- Install system dependencies (Samba, NFS, MergerFS, LVM, mdadm, targetcli)
+- Create the `arcanas` service user and data directories
+- Set up systemd service with auto-start
+- Configure sudoers for privileged operations
+- Start the service
 
 **Access Arcanas:**
 ```
@@ -83,37 +105,126 @@ sudo journalctl -u arcanas -f   # View logs
 
 ```
 arcanas/
-├── 🧠 backend/           # High-performance Go core
-│   ├── cmd/              # Entry points
-│   └── internal/         # Business logic & monitoring
-├── 🎨 frontend/          # Beautiful SvelteKit UI
-│   ├── src/lib/          # Components & stores
-│   └── src/routes/       # Pages & layout
-└── 📜 arcanas            # The God Script (Management CLI)
+├── 🧠 backend/              # Go backend (standard library only)
+│   ├── cmd/server/         # Main entry point
+│   ├── internal/
+│   │   ├── handlers/       # HTTP request handlers
+│   │   ├── system/         # System command execution
+│   │   ├── models/         # Data structures
+│   │   ├── routes/         # API routing
+│   │   └── utils/          # Helper functions
+│   └── static/             # Embedded frontend (generated)
+├── 🎨 frontend/            # SvelteKit 5 frontend
+│   ├── src/lib/           # Components, API client, stores
+│   ├── src/routes/        # Pages (storage, scsi, nfs, samba, etc.)
+│   └── static/            # Static assets
+├── 📜 build.sh             # Production build script
+├── 🔄 dev.sh               # Development hot-reload script
+└── 🚀 deploy.sh            # Remote deployment script
 ```
+
+### Storage Architecture
+
+**New Architecture (Direct Mount):**
+- MD RAID devices mount directly at `/srv/{poolname}`
+- No MergerFS wrapper for single-device pools
+- Better performance and simpler management
+
+**Legacy Support:**
+- Existing `/mnt/arcanas-disk-*` mounts still work
+- Automatically detected and shown as "legacy" type pools
+
+**MergerFS:**
+- Used only for aggregating multiple raw disks (JBOD)
+- Physical disks (sda, sdb) → MergerFS → `/srv/{poolname}`
+
+---
 
 ## ⚙️ Configuration
 
-- **`API_PORT`** - Default: `4000`
-- **Storage** - Pools live in `/srv/`
-- **Service** - Managed by systemd (auto-configured by installer)
+### Environment Variables
+- **`API_PORT`** - Server port (default: `4000`)
+- **`DEV_MODE`** - Enable continuous frontend rebuild (default: `false`)
 
-> **Note:** The installer automatically sets up the systemd service. If you need to manually configure it, the service file is located at `/etc/systemd/system/arcanas.service`.
+### Storage Locations
+- **Storage Pools** - `/srv/{poolname}/`
+- **Legacy Mounts** - `/mnt/arcanas-disk-{device}/`
+- **iSCSI Storage** - `/var/lib/arcanas/iscsi/`
 
-## 🧪 Testing
+### System Requirements
+- Linux (tested on Arch, Ubuntu, Debian)
+- Go 1.24+ (for development)
+- Node.js 20+ (for frontend development)
+- Sudo access for privileged operations
 
-We take quality seriously. Check [TESTING.md](TESTING.md) for our comprehensive testing guide.
+---
 
-## 🤝 Contributing
+## 🛠️ Development
 
-Join the revolution!
-1. Fork it 🍴
-2. Branch it (`git checkout -b feature/cool-stuff`)
-3. Code it 💻
-4. Push it 🚀
-5. PR it 📥
+### Build for Production
+```bash
+./build.sh    # Builds frontend, embeds in Go binary
+# Output: ./arcanas (single binary)
+```
+
+### Build Frontend Only
+```bash
+cd frontend
+npm run build    # Outputs to build/
+```
+
+### Run Backend (One-Shot)
+```bash
+cd backend
+go run cmd/server/main.go
+```
+
+### Run Backend (Auto-Rebuild)
+```bash
+DEV_MODE=true go run cmd/server/main.go
+```
+
+### Frontend Development
+```bash
+cd frontend
+npm run dev      # Start Vite dev server on :5173
+npm run build    # Build for production
+npm run lint     # Prettier + ESLint check
+```
+
+### Remote Deployment
+```bash
+./deploy.sh root@192.168.1.140    # Deploy to remote server
+```
+
+---
+
+## 🔒 Security
+
+- **Sudoers Configuration** - Privileged commands executed via passwordless sudo
+- **Path Validation** - All paths validated to prevent traversal attacks
+- **Input Sanitization** - User inputs sanitized before system command execution
+- **Service Isolation** - Runs as dedicated `arcanas` user
+
+---
 
 ## 📄 License
 
 This project is licensed under the **Mozilla Public License 2.0**.
 See [LICENSE](LICENSE) for details.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! The project uses MPL 2.0 which allows for:
+- Proprietary use of modified files (you keep your modifications private)
+- Copyleft on original files (modifications to MPL-licensed files must remain MPL)
+
+Please ensure all Go files include the MPL license header.
+
+---
+
+## 📜 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and changes.
