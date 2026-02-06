@@ -382,8 +382,11 @@ func getVGInfo(name string) (struct{ Size, Free int64 }, error) {
 		return struct{ Size, Free int64 }{}, fmt.Errorf("unexpected vgs output format")
 	}
 
-	size, _ := strconv.ParseInt(parts[0], 10, 64)
-	free, _ := strconv.ParseInt(parts[1], 10, 64)
+	// Trim the "B" suffix that --units b adds (e.g., "123456789B")
+	sizeStr := strings.TrimSuffix(strings.TrimSpace(parts[0]), "B")
+	freeStr := strings.TrimSuffix(strings.TrimSpace(parts[1]), "B")
+	size, _ := strconv.ParseInt(sizeStr, 10, 64)
+	free, _ := strconv.ParseInt(freeStr, 10, 64)
 
 	return struct{ Size, Free int64 }{Size: size, Free: free}, nil
 }
@@ -513,9 +516,9 @@ func CreateLogicalVolume(req models.LVCreateRequest) (models.LogicalVolume, erro
 			vgInfo.Free/(1024*1024*1024), req.SizeGB)
 	}
 
-	// Create the LV
+	// Create the LV (force wipe signatures and auto-confirm to avoid interactive prompts)
 	lvPath := fmt.Sprintf("/dev/%s/%s", req.VGName, req.Name)
-	output, err := utils.SudoCombinedOutput("lvcreate", "-L", fmt.Sprintf("%.0fG", req.SizeGB), "-n", req.Name, req.VGName)
+	output, err := utils.SudoCombinedOutput("lvcreate", "-L", fmt.Sprintf("%.0fG", req.SizeGB), "-n", req.Name, "-W", "y", "-y", req.VGName)
 	if err != nil {
 		return lv, fmt.Errorf("failed to create LV: %v, output: %s", err, string(output))
 	}
@@ -529,43 +532,81 @@ func CreateLogicalVolume(req models.LVCreateRequest) (models.LogicalVolume, erro
 	actualSize, _ := strconv.ParseInt(strings.TrimSpace(string(sizeOutput)), 10, 64)
 
 	lv = models.LogicalVolume{
-		Name:      req.Name,
-		Path:      lvPath,
-		VGName:    req.VGName,
-		Size:      actualSize,
+		Name:       req.Name,
+		Path:       lvPath,
+		VGName:     req.VGName,
+		Size:       actualSize,
 		MountPoint: "",
-		Available: true,
-		UsedFor:   "available",
-		CreatedAt: time.Now(),
-	}
-
-	// Optionally mount as a storage pool
-	if req.MountAsPool {
-		poolName := req.PoolName
-		if poolName == "" {
-			poolName = req.Name
-		}
-
-		// Create the storage pool using the LV
-		poolReq := models.StoragePoolCreateRequest{
-			Name:    poolName,
-			Type:    "lvm_lv",
-			Devices: []string{lvPath},
-		}
-
-		if err := createLVMountPool(poolReq); err != nil {
-			// LV was created but mount failed - clean up the LV
-			_ = deleteLogicalVolume(lvPath)
-			return lv, fmt.Errorf("LV created but failed to mount as pool: %w", err)
-		}
-
-		// Update LV info with mount point
-		lv.MountPoint = "/srv/" + poolName
-		lv.Available = false
-		lv.UsedFor = "pool"
+		Available:  true,
+		UsedFor:    "available",
+		CreatedAt:  time.Now(),
 	}
 
 	return lv, nil
+}
+
+// MountLVAsPool mounts an existing LV as a storage pool at /srv/{poolName}
+func MountLVAsPool(lvPath, poolName string) error {
+	mountPoint := "/srv/" + poolName
+
+	// Verify the LV exists
+	cmd := exec.Command("sudo", "lvs", lvPath, "-o", "LV_SIZE")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("logical volume not found: %s", lvPath)
+	}
+
+	// Ensure /srv directory exists
+	cmd = exec.Command("sudo", "mkdir", "-p", "/srv")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create /srv directory: %v", err)
+	}
+
+	// Check if LV has a filesystem, format if needed
+	cmd = exec.Command("blkid", "-o", "value", "-s", "TYPE", lvPath)
+	fsOutput, err := cmd.Output()
+	hasFilesystem := err == nil && len(strings.TrimSpace(string(fsOutput))) > 0
+
+	if !hasFilesystem {
+		fmt.Printf("Formatting LV %s with ext4...\n", lvPath)
+		formatCmd := exec.Command("sudo", "mkfs.ext4", "-F", lvPath)
+		if out, err := formatCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("mkfs.ext4 failed: %v %s", err, string(out))
+		}
+	}
+
+	// Create mount point
+	cmd = exec.Command("sudo", "mkdir", "-p", mountPoint)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create mount point %s: %v", mountPoint, err)
+	}
+
+	// Mount the LV
+	if out, err := exec.Command("sudo", "mount", lvPath, mountPoint).CombinedOutput(); err != nil {
+		return fmt.Errorf("mount failed: %v %s", err, string(out))
+	}
+
+	// Set permissions
+	cmd = exec.Command("sudo", "chown", "-R", "nobody:nogroup", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: failed to set pool ownership: %v, output: %s\n", err, string(output))
+	}
+
+	cmd = exec.Command("sudo", "chmod", "-R", "0777", mountPoint)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Warning: failed to set pool permissions: %v, output: %s\n", err, string(output))
+	}
+
+	// Add to fstab for persistence
+	cmd = exec.Command("grep", "-q", mountPoint, "/etc/fstab")
+	if err := cmd.Run(); err != nil {
+		fstabEntry := fmt.Sprintf("%s %s ext4 defaults 0 0\n", lvPath, mountPoint)
+		cmd = exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' >> /etc/fstab", fstabEntry))
+		cmd.Run()
+	}
+
+	fmt.Printf("Successfully mounted LV pool %s from %s at %s (size: %s)\n", poolName, lvPath, mountPoint, strings.TrimSpace(string(output)))
+	return nil
 }
 
 // GetLogicalVolumes returns all LVs with their VG and mount information
@@ -590,11 +631,11 @@ func GetLogicalVolumes() ([]models.LogicalVolume, error) {
 			lvPath := fmt.Sprintf("/dev/%s/%s", vg.Name, lvName)
 
 			// Get LV size
-			sizeCmd := exec.Command("sudo", "lvs", "--noheadings", "--units", "b", "-o", "lv_size", lvPath)
-			sizeOutput, err := sizeCmd.Output()
+			sizeOutput, err := utils.SudoCombinedOutput("lvs", "--noheadings", "--units", "b", "-o", "lv_size", lvPath)
 			lvSize := int64(0)
 			if err == nil {
-				lvSize, _ = strconv.ParseInt(strings.TrimSpace(string(sizeOutput)), 10, 64)
+				sizeStr := strings.TrimSpace(string(sizeOutput))
+				lvSize, _ = strconv.ParseInt(sizeStr, 10, 64)
 			}
 
 			// Check if mounted

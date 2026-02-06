@@ -25,16 +25,6 @@
       usedFormatted: "0.0",
       totalFormatted: "0.0",
     },
-    network: {
-      rx: 0,
-      tx: 0,
-      rxFormatted: "0.0",
-      txFormatted: "0.0",
-      rxRate: 0,
-      txRate: 0,
-      rxRateFormatted: "0.0",
-      txRateFormatted: "0.0",
-    },
     uptime: "0 days, 0 hours",
     temperature: 0,
     services: { running: 0, total: 3 }, // Total of 3 NAS services: SCSI, Samba, NFS
@@ -81,21 +71,6 @@
           ? Math.round((storageUsedBytes / storageTotalBytes) * 100)
           : 0;
 
-      // Convert network bytes using utility
-      const networkRxBytes = systemData?.network?.total_rx || 0;
-      const networkTxBytes = systemData?.network?.total_tx || 0;
-      const networkRxFormatted = formatBytes(networkRxBytes);
-      const networkTxFormatted = formatBytes(networkTxBytes);
-      stats.network.rxFormatted = networkRxFormatted;
-      stats.network.txFormatted = networkTxFormatted;
-      // Convert network rates using utility (rates are in bytes/sec)
-      const networkRxRateBytes = systemData?.network?.rx_rate || 0;
-      const networkTxRateBytes = systemData?.network?.tx_rate || 0;
-      const networkRxRateFormatted = formatBytes(networkRxRateBytes) + "/s";
-      const networkTxRateFormatted = formatBytes(networkTxRateBytes) + "/s";
-      stats.network.rxRateFormatted = networkRxRateFormatted;
-      stats.network.txRateFormatted = networkTxRateFormatted;
-
       stats.uptime = formatUptime(systemData?.system?.uptime || 0);
       stats.temperature = Math.round(systemData?.cpu?.temperature || 0);
 
@@ -136,7 +111,7 @@
 </script>
 
 <!-- Dashboard Stats - Always Rendered -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
   <!-- CPU Usage -->
   <div class="stat-card group">
     <div class="flex items-center justify-between">
@@ -267,75 +242,6 @@
           class="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500 ease-out"
           style="width: {stats?.storage?.percentage || 0}%"
         ></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Network Traffic -->
-  <div class="stat-card">
-    <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm font-medium text-gray-600 dark:text-gray-300">
-          Network
-        </p>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white">
-          {stats?.network?.rxFormatted || "0 B"}
-        </p>
-      </div>
-      <div class="p-3 bg-orange-100 rounded-full">
-        <svg
-          class="h-6 w-6 text-orange-600"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M13 10V3L4 14h7v7l9-11h-7z"
-          />
-        </svg>
-      </div>
-    </div>
-    <div class="mt-4">
-      <div class="flex space-x-2 mb-1">
-        <div class="flex-1 text-xs text-gray-500 dark:text-gray-400">
-          ↓ {stats?.network?.rxRateFormatted || "0 B/s"}
-        </div>
-        <div class="flex-1 text-xs text-gray-500 dark:text-gray-400 text-right">
-          ↑ {stats?.network?.txRateFormatted || "0 B/s"}
-        </div>
-      </div>
-      <div class="flex space-x-2">
-        <div class="flex-1">
-          <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-2">
-            <div
-              class="bg-orange-500 h-2 rounded-full transition-all duration-500"
-              style="width: {Math.min(
-                (stats?.network?.rxRate || 0) / 10,
-                100,
-              )}%"
-            ></div>
-          </div>
-          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Download
-          </div>
-        </div>
-        <div class="flex-1">
-          <div class="w-full bg-gray-200 dark:bg-muted rounded-full h-2">
-            <div
-              class="bg-orange-400 h-2 rounded-full transition-all duration-500"
-              style="width: {Math.min(
-                (stats?.network?.txRate || 0) / 10,
-                100,
-              )}%"
-            ></div>
-          </div>
-          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Upload
-          </div>
-        </div>
       </div>
     </div>
   </div>

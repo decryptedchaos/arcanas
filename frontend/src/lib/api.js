@@ -525,6 +525,40 @@ export const smartAPI = {
   }),
 };
 
+// LVM (Logical Volume Manager) API
+export const lvmAPI = {
+  // Volume Groups
+  getVolumeGroups: () => apiRequest('/volume-groups'),
+
+  createVolumeGroup: (vgData) => apiRequest('/volume-groups', {
+    method: 'POST',
+    body: JSON.stringify(vgData),
+  }),
+
+  deleteVolumeGroup: (vgName) => apiRequest(`/volume-groups/${vgName}`, {
+    method: 'DELETE',
+  }),
+
+  getAvailableDevices: () => apiRequest('/volume-groups/available-devices'),
+
+  // Logical Volumes
+  getLogicalVolumes: () => apiRequest('/logical-volumes'),
+
+  createLogicalVolume: (lvData) => apiRequest('/logical-volumes', {
+    method: 'POST',
+    body: JSON.stringify(lvData),
+  }),
+
+  deleteLogicalVolume: (lvPath) => apiRequest(`/logical-volumes/${lvPath}`, {
+    method: 'DELETE',
+  }),
+
+  mountLVAsPool: (lvPath, poolName) => apiRequest('/logical-volumes/mount', {
+    method: 'POST',
+    body: JSON.stringify({ lv_path: lvPath, pool_name: poolName }),
+  }),
+};
+
 // Legacy function for backward compatibility
 export async function hello() {
   return apiRequest('/hello');

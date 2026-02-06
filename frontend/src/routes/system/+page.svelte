@@ -17,16 +17,14 @@
   // History data for graphs - make them reactive
   let cpuHistory = [{ time: new Date(), value: 0 }];
   let diskIOHistory = [{ time: new Date(), read: 0, write: 0 }];
-  let arrayIOHistory = [{ time: new Date(), read: 0, write: 0 }];
   let networkIOHistory = [{ time: new Date(), rx: 0, tx: 0 }];
   const maxHistoryPoints = 60; // 5 minutes of data at 5-second intervals
 
   async function loadSystemStats() {
     try {
-      const [newStats, diskIORates, arrayIORates, networkIORates] = await Promise.all([
+      const [newStats, diskIORates, networkIORates] = await Promise.all([
         systemAPI.getOverview(),
         systemAPI.getDiskIORates(),
-        systemAPI.getArrayIORates(),
         systemAPI.getNetworkIORates(),
       ]);
 
@@ -47,16 +45,6 @@
           time: now,
           read: (diskIORates?.read_rate || 0) * 1024 * 1024, // Convert MB/s to bytes/sec
           write: (diskIORates?.write_rate || 0) * 1024 * 1024, // Convert MB/s to bytes/sec
-        },
-      ];
-
-      // Array I/O rates (RAID arrays, actual data throughput)
-      arrayIOHistory = [
-        ...arrayIOHistory,
-        {
-          time: now,
-          read: (arrayIORates?.read_rate || 0) * 1024 * 1024, // Convert MB/s to bytes/sec
-          write: (arrayIORates?.write_rate || 0) * 1024 * 1024, // Convert MB/s to bytes/sec
         },
       ];
 
@@ -101,8 +89,6 @@
         cpuHistory = cpuHistory.slice(-maxHistoryPoints);
       if (diskIOHistory.length > maxHistoryPoints)
         diskIOHistory = diskIOHistory.slice(-maxHistoryPoints);
-      if (arrayIOHistory.length > maxHistoryPoints)
-        arrayIOHistory = arrayIOHistory.slice(-maxHistoryPoints);
       if (networkIOHistory.length > maxHistoryPoints)
         networkIOHistory = networkIOHistory.slice(-maxHistoryPoints);
 
@@ -587,132 +573,6 @@
             </div>
             <div class="flex items-center space-x-1">
               <div class="w-3 h-3 bg-amber-500 rounded-full"></div>
-              <span class="text-gray-600 dark:text-gray-300">Write</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Array Throughput Graph -->
-      <div class="card">
-        <div class="flex items-center space-x-4 mb-1">
-          <!-- RAID Icon with glow effect -->
-          <div class="relative">
-            <div class="absolute inset-0 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-xl blur opacity-25"></div>
-            <div class="relative icon-container bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40 rounded-xl flex items-center justify-center shadow-lg">
-              <svg class="icon-inner text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM13 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2z"/>
-              </svg>
-            </div>
-          </div>
-          <div>
-            <h3 class="text-xl font-bold text-gray-900 dark:text-white">
-              Array Throughput
-            </h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400">Actual data transfer rate (RAID arrays)</p>
-          </div>
-        </div>
-        <div class="space-y-4">
-          <div class="flex justify-around">
-            <!-- Read Gauge -->
-            <Gauge
-              value={(arrayIOHistory[arrayIOHistory.length - 1]?.read ?? 0) / (1024 * 1024)}
-              max={calculateScale(arrayIOHistory, "all").max / (1024 * 1024)}
-              color="#6366F1"
-              label="Read"
-              valueFormatter={(v) => formatDataRate(v)}
-            />
-
-            <!-- Write Gauge -->
-            <Gauge
-              value={(arrayIOHistory[arrayIOHistory.length - 1]?.write ?? 0) / (1024 * 1024)}
-              max={calculateScale(arrayIOHistory, "all").max / (1024 * 1024)}
-              color="#A855F7"
-              label="Write"
-              valueFormatter={(v) => formatDataRate(v)}
-            />
-          </div>
-          <div
-            class="graph-height bg-gray-50 dark:bg-muted rounded-lg p-2 relative flex"
-          >
-            <!-- Y-axis labels -->
-            <div
-              class="flex flex-col justify-between text-xs text-gray-500 mr-2 y-axis-width"
-            >
-              {#each calculateScale(arrayIOHistory, "all").steps as step}
-                <span>{(step / (1024 * 1024)).toFixed(1)} MB/s</span>
-              {/each}
-            </div>
-
-            <!-- Graph container -->
-            <div class="flex-1 relative">
-              <svg class="absolute inset-0 w-full h-full">
-                <!-- Grid lines -->
-                <g stroke="#6B7280" stroke-width="0.5">
-                  <!-- Horizontal grid lines -->
-                  <line x1="0%" y1="25%" x2="100%" y2="25%" />
-                  <line x1="0%" y1="50%" x2="100%" y2="50%" />
-                  <line x1="0%" y1="75%" x2="100%" y2="75%" />
-                  <!-- Vertical grid lines -->
-                  <line x1="25%" y1="0%" x2="25%" y2="100%" />
-                  <line x1="50%" y1="0%" x2="50%" y2="100%" />
-                  <line x1="75%" y1="0%" x2="75%" y2="100%" />
-                </g>
-
-                {#each arrayIOHistory as point, i}
-                  {@const arrayScale = calculateScale(arrayIOHistory, "all")}
-                  {@const xPos = (i / arrayIOHistory.length) * 100 + "%"}
-                  <circle
-                    cx={xPos}
-                    cy={100 - (point.read / arrayScale.max) * 100 + "%"}
-                    r="2"
-                    fill="#6366F1"
-                  />
-                  <circle
-                    cx={xPos}
-                    cy={100 - (point.write / arrayScale.max) * 100 + "%"}
-                    r="2"
-                    fill="#A855F7"
-                  />
-                  {#if i > 0}
-                    {@const prevXPos =
-                      ((i - 1) / arrayIOHistory.length) * 100 + "%"}
-                    <line
-                      x1={prevXPos}
-                      y1={100 -
-                        (arrayIOHistory[i - 1].read / arrayScale.max) * 100 +
-                        "%"}
-                      x2={xPos}
-                      y2={100 - (point.read / arrayScale.max) * 100 + "%"}
-                      stroke="#6366F1"
-                      stroke-width="2"
-                      stroke-linejoin="round"
-                      stroke-linecap="round"
-                    />
-                    <line
-                      x1={prevXPos}
-                      y1={100 -
-                        (arrayIOHistory[i - 1].write / arrayScale.max) * 100 +
-                        "%"}
-                      x2={xPos}
-                      y2={100 - (point.write / arrayScale.max) * 100 + "%"}
-                      stroke="#A855F7"
-                      stroke-width="2"
-                      stroke-linejoin="round"
-                      stroke-linecap="round"
-                    />
-                  {/if}
-                {/each}
-              </svg>
-            </div>
-          </div>
-          <div class="flex items-center space-x-4 text-xs">
-            <div class="flex items-center space-x-1">
-              <div class="w-3 h-3 bg-indigo-500 rounded-full"></div>
-              <span class="text-gray-600 dark:text-gray-300">Read</span>
-            </div>
-            <div class="flex items-center space-x-1">
-              <div class="w-3 h-3 bg-purple-500 rounded-full"></div>
               <span class="text-gray-600 dark:text-gray-300">Write</span>
             </div>
           </div>

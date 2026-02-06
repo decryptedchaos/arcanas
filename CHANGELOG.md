@@ -5,52 +5,100 @@ All notable changes to Arcanas will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.6] - 2026-01-26
 
 ### Added
-- **SSH Access Instruction** - Added `ssh root@192.168.1.140` command to CLAUDE.md for quick access to test server
-- **ACL UI Improvements** - Enhanced ACL interface with detailed LUN display and unmap functionality:
-  - **LUN Details Display** - Each mapped LUN now shows LUN number, name, and size instead of just vague numbers
-  - **Unmap Buttons** - Each mapped LUN has an X button (visible on hover) to unmap it from the client
-  - **Better Organization** - Each ACL is in its own card with clear header showing client name and mapped LUN count
-  - **Empty State** - Shows "No LUNs mapped to this client" when appropriate
-  - **Missing LUN Detection** - Shows "(LUN not found)" for mappings to deleted LUNs
+- **Dashboard I/O Gauges** - Real-time Disk I/O and Network I/O visualization on dashboard
+  - Circular gauge components showing read/write rates for physical disks
+  - Network gauges displaying download/upload speeds in Mbps
+  - Replaces SystemStatus component with more actionable performance metrics
+- **Storage Builder** - New unified workflow system for storage configuration with flexible entry points
+  - **Workflow Selector** (`/storage-builder`) - Central hub with 5 workflow options
+    - Complete Storage Setup - Full guided wizard (Disks → RAID → LVM → Pool → Shares)
+    - RAID Array - Standalone RAID creation from physical disks
+    - LVM Volumes - Redirects to existing `/lvm` page for VG/LV management
+    - Storage Pool - Create pools from devices, RAID arrays, or LVM logical volumes
+    - Network Shares - Create NFS or Samba shares from existing storage
+  - **Individual Workflows** - Each component can be configured independently without forced multi-step process
+  - **Storage Pool Types** - Pool creation now supports 3 types:
+    - Bind Mount - Single device directly mounted
+    - MergerFS - Pool multiple devices together
+    - LVM Logical Volume - Mount existing unmounted LVs as storage pools
+  - **StorageBuilderCard** - Prominent card on Dashboard and Storage pages for easy workflow access
+  - **FirstRunBanner** - Non-intrusive banner for first-time users to launch Storage Builder
+- **LVM Volumes Page** - New dedicated page (`/lvm`) for managing LVM volume groups and logical volumes
+  - Create/delete volume groups from available physical devices (RAID arrays, disks)
+  - Create/delete logical volumes from volume groups
+  - View VG size, free space, and usage statistics
+  - Expandable VG cards showing associated logical volumes
+  - Mount LVs as storage pools directly from the LVM page
+- **LVM Frontend API** - New `lvmAPI` with methods for VG and LV management
+  - `getVolumeGroups()`, `createVolumeGroup()`, `deleteVolumeGroup()`
+  - `getLogicalVolumes()`, `createLogicalVolume()`, `deleteLogicalVolume()`
+  - `getAvailableDevices()` for discovering devices suitable for VG creation
+- **Frontend Component Architecture** - Refactored storage page into reusable components
+  - `DisksTab.svelte` - Disk listing with SMART health indicators
+  - `RAIDTab.svelte` - RAID array management with delete functionality
+  - `PoolsTab.svelte` - Storage pool management with action callbacks
+  - Cleaner separation of concerns, easier testing and maintenance
+- **Svelte Expression Conventions** - Added `.claude/svelte-conventions.md` documenting:
+  - Variable reference patterns (full object paths, store prefixes)
+  - Event handler patterns (arrow functions for parameters)
+  - Immutable array/object operations
+  - Common pitfalls and how to avoid them
+  - Component best practices (props, callbacks, accessibility)
+
+### Changed
+- **Dashboard Layout** - Removed SystemStatus component in favor of inline I/O gauges
+  - SystemStatus and DashboardStats were redundant (both showing CPU/memory)
+  - I/O gauges provide unique value not shown elsewhere on dashboard
+- **Storage Page Buttons** - "Create RAID Array" and "Create Storage Pool" now link to dedicated workflow pages instead of opening modals
+- **NFS/Samba Share Creation** - Simplified to only show Storage Pools in path selection
+  - Removed LVM Logical Volumes dropdown section to eliminate confusion
+  - Storage Pools are now the single source of truth for shareable storage
+  - LVM volumes must be mounted as pools first before they can be shared
+- **Pool Type Validation** - Pool creation uses `lvm` type (instead of `lvm_lv`) for LVM logical volume pools to match backend expectations
+- **Navigation** - Added "LVM Volumes" link to sidebar between "Storage" and "Sharing"
+- **Removed Deprecated Usage Mode** - Storage pools no longer have export mode selector (file/iSCSI/available options removed from pools UI)
+- **Documentation** - Updated CLAUDE.md and README.md with Storage Builder, LVM routes, and component architecture
 
 ### Fixed
-- **iSCSI Slow Link Transfer Behavior** - Configured iSCSI target with conservative burst lengths (`FirstBurstLength=32KB`, `MaxBurstLength=64KB`) to prevent false transfer completion reporting on slow links (50Mbps/5MB/s). The default 256KB MaxBurstLength caused transfers to appear complete instantly while data continued transferring at line speed in the background.
-  - **Backend**: `EnsureISCSITargetConfigured()` now sets burst lengths via configfs when creating iSCSI targets
-  - **Fresh Installs**: `install.sh` creates `arcanas-iscsi-config.service` to apply settings on boot
-  - **Upgrades**: Run `/usr/local/bin/arcanas-iscsi-config.sh` manually or restart the service to apply to existing installations
-- **iSCSI LUN Cache Mode** - Configured block backstores to disable thin provisioning unmap emulation (`emulate_tpu=0`) for more predictable I/O behavior.
-- **Deploy Script Frontend Sync** - Fixed rsync include rules order to properly sync frontend build files to remote server
-- **ACL URL Encoding** - Fixed ACL deletion, LUN mapping, and LUN unmapping to properly URL-decode IQNs from request paths (colons in IQNs like `iqn.2016-04.com.open-iscsi:c8e34e60ec9` were being sent as `%3A`)
-- **ACL Creation Auto-Remove LUNs** - New ACLs start with no LUNs mapped (auto-mapped LUNs are automatically removed) so users have explicit control over which LUNs to map
-- **ACL IQN Parsing** - Fixed `GetISCSIACLs` to correctly extract IQN from targetcli output (was using `parts[0]` which was `o-`, now uses `parts[1]` for the actual IQN)
-- **LUN Detection via ConfigFS** - Fixed `getMappedLUNsForACL` to use configfs link file detection instead of parsing targetcli output for more reliable LUN mapping status
-- **LUN Backstore Detection** - Fixed `MapLUNToACL` to use `ls` command instead of `info` command for more reliable backstore path parsing from targetcli output
-- **LUN Mapping with Existing Symlinks** - Fixed LUN mapping to detect and reuse existing symlinks instead of trying to create duplicate symlinks
-  - `DELETE /api/iscsi/acls/{iqn}/luns/{lun}` - Unmap LUN from ACL
-  - `GET /api/iscsi/acls-for-lun?lun=N` - Get all ACLs for a specific LUN
-- **Target Configuration Change** - Disabled auto-ACL generation (`generate_node_acls=0`) for manual access control
-- **ACL Models** - New `ISCSIACL`, `ISCSIACLMappedLUN`, `ACLCreateRequest`, `ACLMapLUNRequest` models
-- **ACL System Functions** - `GetISCSIACLs()`, `CreateISCSIACL()`, `DeleteISCSIACL()`, `MapLUNToACL()`, `UnmapLUNFromACL()`, `GetACLsForLUN()`
-- **LUN Number Display Fix** - Fixed regex-based LUN parsing to correctly display LUN numbers (0, 1, 2, etc.) instead of all showing as LUN 0
-- **Storage Pool Export Modes** - Unified storage management with three export modes:
-  - **File Mode** - Mounted filesystem for NFS/Samba sharing (default)
-  - **iSCSI Mode** - Unmounted, available for iSCSI/LVM use
-  - **Available Mode** - Unmounted, reserved for future use
-- **Export Mode API** - `POST /api/storage-pools/{name}/export-mode` to switch modes
-- **New iSCSI Architecture** - Redesigned iSCSI with single target, multiple LUNs model (enterprise standard)
-- **LVM Volume Group Management** - Separate VG system from storage pools for iSCSI LUNs:
+- **Pool Creation API Error** - Fixed 400 Bad Request when creating LVM-backed pools
+  - Changed pool type from `lvm_lv` to `lvm` to match backend validation
+  - Backend handler accepts `lvm` as valid pool type for LVM logical volumes
+- **LVM Signature Wipe Prompt** - Fixed LV creation failing on existing signatures with "Wipe it? [y/n]" prompt
+  - Added both `-W y` (wipesignatures) and `-y` (auto-confirm) flags to `lvcreate` command
+  - The `-y` flag is required to auto-answer the signature wipe prompt
+  - Allows reusing LV names from previously deleted volumes without manual intervention
+- **LVM Free Space Detection** - Fixed "not enough free space in VG (have 0 GB)" error when creating LVs
+  - `getVGInfo()` was not trimming the "B" suffix from `vgs --units b` output (e.g., "123456789B")
+  - `ParseInt()` was failing to parse strings with suffix, returning 0
+  - Now properly strips "B" suffix before parsing, same as `GetVolumeGroups()` function
+- **LVM Pool Name Expression Error** - Fixed "pool is not defined" error in LVM page
+  - Changed `{pool-name || newLV.name}` to `{newLV.poolName || newLV.name}`
+  - The hyphenated name was being interpreted as subtraction (pool minus name) instead of a variable reference
+- **LVM Input Pattern Regex Error** - Fixed "character class escape cannot be used in class range" validation error
+  - Changed `pattern="[a-z0-9-]+"` to `pattern="[a-z0-9\-]+"` to properly escape hyphen in regex character class
+  - Allows hyphens in VG and LV names (e.g., "vg-data", "lv-bank")
+- **Storage Page Tab Structure** - Fixed improper if/else block nesting that caused "attempted to close an element that was not open" error
+  - Added missing `{/if}` to close the outer `activeTab` if/else chain
+  - Properly closes tab content div structure
+
+---
+
+## [1.0.5] - 2026-01-25
+
+### Added
+- **LVM Volume Group Management** - Separate VG system from storage pools for iSCSI LUNs
   - **VG Creation** - Create volume groups from physical devices (RAID arrays, disks)
   - **VG Management Tab** - New tab in Storage page for managing volume groups
   - **Quick VG Creation in iSCSI** - Create volume groups directly when creating LVM LUNs
   - **VG Deletion** - Delete VGs with automatic LUN cleanup
 - **LVM LUN Backends** - Create flexible, resizable LUNs from LVM volume groups (recommended for sharing storage)
-- **Clear Backend Options** - Three LUN backends with clear descriptions:
-  - LVM Volume (Flexible) - Create LUNs of any size from VG. Best for sharing storage among clients
-  - Block Device (Dedicated) - Use entire disk/RAID for one LUN. Simple but uses whole device
-  - File-Based (Testing) - File on disk as LUN. For testing only. Slower performance
+  - **Clear Backend Options** - Three LUN backends with clear descriptions:
+    - LVM Volume (Flexible) - Create LUNs of any size from VG. Best for sharing storage among clients
+    - Block Device (Dedicated) - Use entire disk/RAID for one LUN. Simple but uses whole device
+    - File-Based (Testing) - File on disk as LUN. For testing only. Slower performance
 - **New iSCSI UI** - `/scsi` route with simplified LUN management interface
 - **Storage Pool Editing** - Edit pool name and mount options without deletion
 - **NFS Path Editing** - Change export paths on existing NFS shares
@@ -61,9 +109,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **iSCSI Auto-Unmount** - Mounted devices (including RAID arrays) are automatically unmounted when used as iSCSI backing stores
 - **Volume Group API** - `GET/POST /api/volume-groups`, `DELETE /api/volume-groups/{name}`, `GET /api/volume-groups/available-devices`
 - **LV Info on LUN Cards** - LVM-backed LUNs now display Logical Volume path and size (queried via `lvs`)
+- **New iSCSI Architecture** - Redesigned iSCSI with single target, multiple LUNs model (enterprise standard)
+- **Storage Pool Export Modes** - Unified storage management with three export modes
+  - **File Mode** - Mounted filesystem for NFS/Samba sharing (default)
+  - **iSCSI Mode** - Unmounted, available for iSCSI/LVM use
+  - **Available Mode** - Unmounted, reserved for future use
+- **Export Mode API** - `POST /api/storage-pools/{name}/export-mode` to switch modes
 
 ### Changed
-- **iSCSI Access Control Model** - Changed from automatic ACL generation to manual per-client ACL management:
+- **iSCSI Access Control Model** - Changed from automatic ACL generation to manual per-client ACL management
   - **Breaking Change** - Existing clients will lose access until ACLs are created and LUNs are explicitly mapped
   - **Benefit** - Each client only sees LUNs explicitly mapped to their ACL (improved security and isolation)
   - **Migration Required** - After upgrade, create ACLs for each client and map their required LUNs
@@ -92,121 +146,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MD Device Samba Permissions** - MD RAID devices mounted anywhere are now automatically detected and given proper permissions for Samba access (nobody:nogroup ownership, 0777 permissions)
 - **iSCSI Target Creation** - Fixed bug where created targets had no backing store or LUN attached
 - **iSCSI Target Update** - Targets can now be updated with new backing stores (replaces existing LUN)
-- **iSCSI targetcli Commands** - Fixed all targetcli command paths from relative (`iscsi/`) to absolute (`/iscsi/`) syntax
-- **iSCSI LUN Parsing** - Improved LUN detection and backstore path parsing from targetcli output
-- **iSCSI ACL LUN Mapping** - Fixed LUN to ACL mapping by dynamically querying backstore path instead of hardcoding `/backstores/block/`
-- **ACL IQN Validation** - Fixed IQN input regex pattern to properly validate IQN format with hyphens and colons
-
----
-
-## [1.0.4] - 2025-01-16
-
-### Added
-- **Authentication System** - Login page with JWT-based session management
-- **SMART Monitoring** - dedicated page for disk health monitoring with SMART attributes and error logs
-- **Settings Page** - System and network settings configuration interface
-- **NFS Exports** - Management interface for configuring NFS shares
-- **User Management** - User and service account permissions
-- **Theme Variables** - CSS custom properties for consistent theming
-- **Gauge Component** - Reusable gauge visualization component
-
-### Changed
-- **Visual Style** - UI beautification across all pages
-- **NFS Exports Backend** - Enhanced handlers and models for NFS export management
-- **Disk Handlers** - Expanded disk management capabilities
-- **System Page** - Improved system monitoring display
-- **Network Settings** - New network configuration options
-- **Install Script** - Fixed installation bugs and improved instructions
-- **Documentation** - Updated README with better descriptions and installation instructions
-
-### Fixed
-- **Download Link** - Fixed download links in README
-- **Pipe Display** - Fixed pipe character display issues
-- **Install Bug** - Fixed installation script errors
-
----
-
-## [1.0.3] - 2026-01-15
-
-### Added
-- **Theme Update** - Visual theme improvements
-- **Automatic Version Bumps** - CI/CD integration for version management
-
----
-
-## [1.0.2] - 2026-01-15
-
-### Added
-- **Visual Beautification** - UI enhancements across storage and system pages
-
----
-
-## [1.0.1] - 2025-12-10
-
-### Changed
-- Rapid development iterations with multiple improvements
-
----
-
-## [1.0.0] - 2025-12-08
-
-### Added
-- **Initial Release** - Storage pools, RAID, NFS, Samba, system monitoring
-
----
-
-## Version History
-
-| Version | Date | Description |
-|---------|------|-------------|
-| 1.0.5 | TBD | Storage pool editing, NFS path editing, RAID fixes, enhanced backing stores |
-| 1.0.4 | 2025-01-16 | Authentication, SMART monitoring, settings page, NFS exports |
-| 1.0.3 | 2026-01-15 | Theme update and automatic version bumps |
-| 1.0.2 | 2026-01-15 | Visual beautification |
-| 1.0.1 | 2025-12-10 | Rapid development iterations |
-| 1.0.0 | 2025-12-08 | Initial release |
-
----
-
-## Breaking Changes
-
-### v1.0.4 → v1.0.5 (Unreleased)
-- **iSCSI Access Control**: Manual ACL management is now required for client access
-  - Existing iSCSI clients will lose access to all LUNs after upgrade
-  - ACLs must be created for each client IQN that needs access
-  - LUNs must be explicitly mapped to each ACL
-  - This provides per-client LUN isolation (each client sees only mapped LUNs)
-- **Storage Pool Mount Points**: New pools use `/srv/{poolname}` instead of `/mnt/arcanas-disk-*`
-- **Legacy pools** are automatically detected and marked as type "legacy"
-- To migrate: Delete old pool and recreate with new architecture (data preserved on device)
-
----
-
-## Upgrade Notes
-
-### From v1.0.3 to v1.0.4
-1. Stop the service: `sudo systemctl stop arcanas`
-2. Backup your data
-3. Download and install the new version
-4. Start the service: `sudo systemctl start arcanas`
-
-### From v1.0.4 to v1.0.5 (Unreleased)
-1. **iSCSI Migration Required**: After upgrade, existing iSCSI clients will lose access
-   - Go to the iSCSI page and create ACLs for each client that needs access
-   - For each ACL, map the LUNs that client should be able to access
-   - Clients may need to re-discover targets (`iscsiadm -m discovery -t st -p <target>`)
-2. Storage pools created with old architecture will continue to work
-3. New pools will use direct mount architecture
-4. To migrate an old pool: Delete and recreate (data stays on device)
-
----
-
-## Contributors
-
-- @decryptedchaos - Creator and maintainer
-
----
-
-## License
-
-This project is licensed under the Mozilla Public License 2.0.

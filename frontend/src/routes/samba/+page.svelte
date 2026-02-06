@@ -477,8 +477,7 @@
                         <div
                             class="w-full p-2 border rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200"
                         >
-                            No storage pools available. Please create a storage
-                            pool first.
+                            No storage pools available. Please create a storage pool first.
                         </div>
                     {:else}
                         <select
@@ -605,8 +604,7 @@
                         <div
                             class="w-full p-2 border rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200"
                         >
-                            No storage pools available. Please create a storage
-                            pool first.
+                            No storage pools available. Please create a storage pool first.
                         </div>
                     {:else}
                         <select

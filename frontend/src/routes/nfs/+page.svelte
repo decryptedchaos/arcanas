@@ -821,11 +821,11 @@
             </div>
           {:else}
             <div>
-              <label for="export-pool" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Storage Pool
+              <label for="export-path" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Export Path
               </label>
               <select
-                id="export-pool"
+                id="export-path"
                 bind:value={newExport.path}
                 class="w-full px-3 py-2 border border-gray-300 dark:border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-muted dark:text-white"
                 required
@@ -982,7 +982,7 @@
             {#if storagePools.length > 0}
               <div class="mt-2">
                 <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                  Or select from available storage pools:
+                  Or select from available storage:
                 </label>
                 <select
                   class="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border rounded-md bg-white dark:bg-card text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-primary-500"

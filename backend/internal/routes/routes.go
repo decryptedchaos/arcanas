@@ -346,6 +346,14 @@ func SetupRoutes() *http.ServeMux {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+	mux.HandleFunc("/api/logical-volumes/mount", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			handlers.MountLVAsPool(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// Samba shares endpoints
 	mux.HandleFunc("/api/samba-shares", func(w http.ResponseWriter, r *http.Request) {

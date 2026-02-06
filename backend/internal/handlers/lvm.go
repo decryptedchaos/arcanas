@@ -157,6 +157,53 @@ func CreateLogicalVolume(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(lv)
 }
 
+// MountLVAsPool mounts an existing LV as a storage pool
+func MountLVAsPool(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		LVPath   string `json:"lv_path"`
+		PoolName string `json:"pool_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate
+	if req.LVPath == "" {
+		http.Error(w, "LV path is required", http.StatusBadRequest)
+		return
+	}
+	if req.PoolName == "" {
+		http.Error(w, "Pool name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate path to prevent path traversal
+	if strings.Contains(req.LVPath, "..") {
+		http.Error(w, "Invalid LV path", http.StatusBadRequest)
+		return
+	}
+
+	// Accept both "/dev/vg/lv" and "vg/lv" formats
+	lvPath := req.LVPath
+	if !strings.HasPrefix(lvPath, "/dev/") {
+		lvPath = "/dev/" + lvPath
+	}
+
+	if err := system.MountLVAsPool(lvPath, req.PoolName); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to mount LV as pool: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":      "mounted",
+		"lv_path":     lvPath,
+		"pool_name":   req.PoolName,
+		"mount_point": "/srv/" + req.PoolName,
+	})
+}
+
 // DeleteLogicalVolume removes a logical volume
 func DeleteLogicalVolume(w http.ResponseWriter, r *http.Request) {
 	// Extract LV path from URL path

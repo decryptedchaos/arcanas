@@ -11,7 +11,16 @@
 ## ✨ Features
 
 ### Storage Management
-- **🛡️ Storage Pools** - Advanced management for MergerFS, LVM, and direct device mounts
+- **🛠️ Storage Builder** - Unified workflow system with flexible entry points for storage configuration
+  - Complete guided wizard (Disks → RAID → LVM → Pools → Shares)
+  - Standalone workflows for RAID, LVM, Pools, and Shares
+  - Create LVM-backed pools directly from existing logical volumes
+- **🛡️ Storage Pools** - Advanced management for MergerFS (JBOD), bind mounts, and LVM-backed pools
+- **📦 LVM Volumes** - Dedicated LVM management page for creating volume groups and logical volumes
+  - Create VGs from RAID arrays or physical disks
+  - Create flexible, resizable LVs from VGs
+  - Mount LVs as storage pools for NFS/Samba sharing
+  - Full CRUD operations for volume groups and logical volumes
 - **📼 RAID Mastery** - Create, manage, and monitor MD RAID arrays (0, 1, 5, 6, 10)
 - **💿 Disk Management** - Format disks, manage partitions, view SMART data
 - **🔄 Device Mounting** - Mount/unmount devices for switching between storage pools and iSCSI
@@ -27,7 +36,7 @@
 - **🔐 ACL Configuration** - Manage initiator IQNs and access control lists
 
 ### Monitoring & System
-- **⚡ Real-time Monitoring** - Live CPU, memory, network, and disk I/O metrics
+- **⚡ Real-time Monitoring** - Live CPU, memory, network, and disk I/O metrics with circular gauge visualizations
 - **📊 SMART Data** - Drive health monitoring with test execution
 - **🖥️ System Info** - View processes, logs, and system resources
 - **👥 User Management** - Manage users and service account permissions
@@ -125,18 +134,31 @@ arcanas/
 
 ### Storage Architecture
 
-**New Architecture (Direct Mount):**
-- MD RAID devices mount directly at `/srv/{poolname}`
-- No MergerFS wrapper for single-device pools
-- Better performance and simpler management
+Arcanas provides multiple storage management approaches for different use cases:
 
-**Legacy Support:**
-- Existing `/mnt/arcanas-disk-*` mounts still work
-- Automatically detected and shown as "legacy" type pools
+**LVM (Logical Volume Manager)** - Flexible volume management
+- Create volume groups from RAID arrays or physical disks
+- Create logical volumes of any size from VGs (resizable!)
+- Mount LVs at `/srv/{poolname}/` for NFS/Samba sharing
+- Ideal for: Flexible storage allocation, volume resizing, snapshots
 
-**MergerFS:**
-- Used only for aggregating multiple raw disks (JBOD)
-- Physical disks (sda, sdb) → MergerFS → `/srv/{poolname}`
+**MergerFS (JBOD)** - Aggregate independent disks
+- Multiple physical disks pooled together
+- No striping/redundancy (filesystem-level only)
+- Mounts at `/srv/{poolname}/`
+- Ideal for: Pooling disks of different sizes without RAID
+
+**Bind Mounts** - Share existing directories
+- Mount any directory path as a storage pool
+- No filesystem creation required
+- Ideal for: Reusing existing data locations
+
+**Storage Pool Types:**
+| Type | Use Case | Managed Via |
+|------|----------|------------|
+| LVM LV | Flexible resizable volumes | LVM Volumes page |
+| MergerFS | JBOD disk aggregation | Storage Pools page |
+| Bind Mount | Share existing paths | Storage Pools page |
 
 ---
 
